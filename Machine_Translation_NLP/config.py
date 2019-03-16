@@ -6,7 +6,9 @@ EOS_token = 2
 UNK_token = 3
 vocab_prefix = ['<PAD>', '<SOS>', '<EOS>', '<UNK>']
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 embedding_freeze = False
+att_concat_hz = 64
 
 #src_vocab_size = 40000
 #tgt_vocab_size = 20000
