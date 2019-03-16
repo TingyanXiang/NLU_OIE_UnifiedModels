@@ -13,7 +13,7 @@ class beam:
 		self.next_ts = [torch.LongTensor(size).fill_(PAD_token).to(device)]
 		self.next_ts[0][0] = SOS_token
 		# score for each path on the beam
-		self.scores = torch.zeros(size, dtype=torch.float, device = device)
+		self.scores = torch.zeros(size, dtype=torch.float, device=device)
 		self.all_scores = [] # all histories
 		self.n_best = n_best # choose how many paths finally
 

@@ -39,7 +39,7 @@ def train(input_tensor, input_lengths, target_tensor, target_lengths,
     encoder_outputs, encoder_hidden, encoder_cell = encoder(input_tensor, encoder_hidden, input_lengths, encoder_cell)
 
     decoder_input = torch.tensor([[SOS_token]*batch_size], device=device).transpose(0,1)
-    decoder_hidden,decoder_cell = encoder_hidden, encoder_cell  #decoder.initHidden(encoder_hidden)
+    decoder_hidden, decoder_cell = decoder.initHidden(encoder_hidden)
     #print(decoder_hidden.size())
     #print('encoddddddddddder finishhhhhhhhhhhhhhh')
     use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
@@ -69,6 +69,7 @@ def train(input_tensor, input_lengths, target_tensor, target_lengths,
             loss += criterion(decoder_output, target_tensor[:,decoding_token_index])
             decoder_input = target_tensor[:,decoding_token_index].unsqueeze(1)  # Teacher forcing
             decoding_token_index += 1
+
 
     else:
         ### debug 
@@ -101,8 +102,7 @@ def train(input_tensor, input_lengths, target_tensor, target_lengths,
             decoder_input = topi.detach()  # detach from history as input
             decoding_token_index += 1
 
-    
-    # average loss        
+    # average loss
     #target_lengths.type_as(loss).mean()
     loss.backward()
 
@@ -183,10 +183,12 @@ def start_train(transtype, paras):
 
     teacher_forcing_ratio = paras['teacher_forcing_ratio']
     emb_size = paras['emb_size']
-    hidden_size = paras['hidden_size']
-    num_layers = paras['num_layers']
-    num_direction = paras['num_direction']
-    deal_bi = paras['deal_bi']
+    en_hidden_size = paras['en_hidden_size']
+    en_num_layers = paras['en_num_layers']
+    en_num_direction = paras['en_num_direction']
+    de_hidden_size = paras['de_hidden_size']
+    de_num_layers = paras['de_num_layers']
+
     learning_rate = paras['learning_rate']
     num_epochs = paras['num_epochs']
     batch_size = paras['batch_size']
@@ -272,9 +274,9 @@ def start_train(transtype, paras):
     embedding_tgt_weight = torch.from_numpy(tgtLang.embedding_matrix).type(torch.FloatTensor).to(device)
     print(embedding_src_weight.size(), embedding_tgt_weight.size())
     if attention_type:
-        encoder = EncoderRNN(srcLang.vocab_size, emb_size, hidden_size, num_layers, num_direction, deal_bi, rnn_type = rnn_type,  embedding_weight = embedding_src_weight, dropout_rate = dropout_rate)
-        decoder = DecoderAtten(emb_size, hidden_size, tgtLang.vocab_size, num_layers, rnn_type = rnn_type, embedding_weight = embedding_tgt_weight, atten_type = attention_type, dropout_rate = dropout_rate)
-    else:      
+        encoder = EncoderRNN(srcLang.vocab_size, emb_size, en_hidden_size, en_num_layers, en_num_direction, rnn_type=rnn_type, embedding_weight=embedding_src_weight, dropout_rate=dropout_rate)
+        decoder = DecoderAtten(tgtLang.vocab_size, emb_size, de_hidden_size, de_num_layers, (en_num_layers, en_num_direction, en_hidden_size), rnn_type=rnn_type, embedding_weight=embedding_tgt_weight, atten_type=attention_type, dropout_rate=dropout_rate)
+    else:
         encoder = EncoderRNN(srcLang.vocab_size, emb_size,hidden_size, num_layers, num_direction, deal_bi, rnn_type = rnn_type, embedding_weight = embedding_src_weight, dropout_rate = dropout_rate)
         decoder = DecoderRNN(emb_size, hidden_size, tgtLang.vocab_size, num_layers, rnn_type = rnn_type, embedding_weight = embedding_tgt_weight, dropout_rate = dropout_rate)
 
@@ -297,12 +299,14 @@ if __name__ == "__main__":
         max_tgt_len_dataloader = 71, #72, #71, 
 
         emb_size = 300,
-        hidden_size = 256,
-        num_layers = 2,
-        num_direction = 2,
-        deal_bi = 'linear', #'linear', #{'linear', 'sum'}
-        rnn_type = 'LSTM', # {LSTM, GRU}
-        attention_type = 'dot_prod', #'dot_prod', general, concat
+        en_hidden_size = 256,
+        en_num_layers = 2,
+        en_num_direction = 2,
+        de_hidden_size = 128,
+        de_num_layers = 3,
+        #deal_bi = 'linear', #'linear', #{'linear', 'sum'} #linear layer en-hid to de_hid
+        rnn_type = 'GRU', # {LSTM, GRU}
+        attention_type = 'dot_prod', #'dot_prod', general, concat #dot-product need pre-process
         teacher_forcing_ratio = 0.5,
 
         learning_rate = 1e-3,
@@ -312,7 +316,7 @@ if __name__ == "__main__":
         dropout_rate = 0.1,
 
         model_save_info = dict(
-            model_path = 'nmt_models/vi-en-lstm-22-256-dot-0.5(1)-0.1/',
+            model_path = 'nmt_models/vi-en-1/',
             epochs_per_save_model = 1,
             model_path_for_resume = None #'nmt_models/epoch_0.pth'
             )
