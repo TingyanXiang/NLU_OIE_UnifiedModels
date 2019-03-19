@@ -16,7 +16,6 @@ class EncoderRNN(nn.Module):
             self.embedding = nn.Embedding(vocab_size,embed_size)
         self.num_layers = num_layers
         self.dropout = nn.Dropout(dropout_rate)
-        self.deal_bi = deal_bi
         self.rnn_type = rnn_type
 
         if num_direction == 1:

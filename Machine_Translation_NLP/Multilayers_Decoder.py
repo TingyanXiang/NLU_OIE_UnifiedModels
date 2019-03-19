@@ -7,7 +7,6 @@ import numpy as np
 class DecoderRNN(nn.Module):
     def __init__(self, emb_size, hidden_size, vocab_size, num_layers, rnn_type = 'GRU', embedding_weight = None, dropout_rate = 0.1):
         super(DecoderRNN, self).__init__()
-        self.device = device
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.dropout = nn.Dropout(dropout_rate)
@@ -87,10 +86,10 @@ class DecoderAtten(nn.Module):
     def initHidden(self, encoder_hidden):
         batch_size = encoder_hidden.size(1)
         #(en_num_layers*num_direction, bz, en_hidden_size) >> (bz, en_num_layers*num_direction*en_hidden_size)
-        encoder_hidden = encoder_hidden.tranpose(0,1).contiguous().view(batch_size, -1)
+        encoder_hidden = encoder_hidden.transpose(0,1).contiguous().view(batch_size, -1)
         hidden = self.transform_en_hid(encoder_hidden) #(bz, de_num_layers*de_hidden_size)
         hidden = hidden.view(batch_size, self.num_layers, self.hidden_size).transpose(0,1).contiguous()
-        cell = torch.zeros(self.num_layers, batch_size, self.hidden_size, device=self.device)
+        cell = torch.zeros(self.num_layers, batch_size, self.hidden_size, device=device)
         return hidden, cell #(de_num_layers, bz, de_hidden_size)
 
 class AttentionLayer(nn.Module):
@@ -103,6 +102,7 @@ class AttentionLayer(nn.Module):
             if q_hidden_size != m_hidden_size:
                 print((q_hidden_size, m_hidden_size), 'query and memory must have the same hidden size; use general way automatically')
                 self.mode = 'general'
+                self.general_linear = nn.Linear(q_hidden_size, m_hidden_size, bias=False)
             else:
                 print('dot_prod')
         elif atten_type == 'general':
@@ -140,7 +140,7 @@ class AttentionLayer(nn.Module):
             out = torch.bmm(query, memory_bank.transpose(1, 2))
         elif self.mode == 'general':
             temp = self.general_linear(query.view(batch_size * query_len, self.q_hidden_size))
-            out = torch.bmm(temp.view(batch_size,query_len,self.q_hidden_size),memory_bank.transpose(1, 2))
+            out = torch.bmm(temp.view(batch_size,query_len,self.m_hidden_size),memory_bank.transpose(1, 2))
         elif self.mode == 'concat':
             query_temp = query.unsqueeze(2).expand(batch_size,query_len,src_len,self.q_hidden_size)
             memory_temp = memory_bank.unsqueeze(1).expand(batch_size,query_len,src_len,self.m_hidden_size)
