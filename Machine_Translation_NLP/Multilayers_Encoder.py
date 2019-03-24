@@ -34,8 +34,8 @@ class EncoderRNN(nn.Module):
             self.lstm = nn.LSTM(embed_size, hidden_size, num_layers, batch_first=True, dropout=dropout_rate, bidirectional=bi_direction)
         else:
             print('RNN TYPE ERROR')
-        # deal with hidden output for decoder hidden input initial
-        self.transform_en_hid = nn.Linear(num_layers*num_direction*hidden_size, np.prod(decoder_params), bias=False)
+        # # deal with hidden output for decoder hidden input initial
+        # self.transform_en_hid = nn.Linear(num_layers*num_direction*hidden_size, np.prod(decoder_params), bias=False)
         # if deal_bi == 'linear':
         #     self.linear_compress = nn.Linear(2*self.hidden_size, self.hidden_size, bias=False) 
         #     self.linear_compress_cell = nn.Linear(2*self.hidden_size, self.hidden_size, bias=False) 
@@ -53,29 +53,31 @@ class EncoderRNN(nn.Module):
             rnn_out, (hidden, cell) = self.lstm(embed, (hidden, cell))
         #rnn_out, hidden = self.gru(embed, hidden)
         rnn_out, _ = torch.nn.utils.rnn.pad_packed_sequence(rnn_out, batch_first=True) #(bz, src_len, num_directions * hidden_size)
-        hidden = self.transform_en_hid(hidden.transpose(0,1).contiguous().view(batch_size, -1))
-        hidden = hidden.view(batch_size, self.decoder_params[0], self.decoder_params[1]).transpose(0,1).contiguous()
-        # if self.num_direction == 2:
-        #     hidden = hidden.view(self.num_layers, self.num_direction, batch_size, self.hidden_size)
-        #     if cell is not None:
-        #         cell = cell.view(self.num_layers, self.num_direction, batch_size, self.hidden_size)
-        #     if self.deal_bi == 'linear':
-        #         hidden = self.linear_compress(hidden.transpose(1,2).contiguous().view(self.num_layers, batch_size, self.num_direction*self.hidden_size))
-        #         rnn_out = self.linear_compress(rnn_out)
-        #         if cell is not None:
-        #             cell = self.linear_compress_cell(cell.transpose(1,2).contiguous().view(self.num_layers, batch_size, self.num_direction*self.hidden_size))
-        #     elif self.deal_bi == 'sum':
-        #         hidden = torch.sum(hidden, dim=1)
-        #         if cell is not None:
-        #             cell = torch.sum(cell, dim=1)
-        #         src_len_batch = rnn_out.size(1)
-        #         rnn_out = torch.sum(rnn_out.view(batch_size, src_len_batch, self.num_direction, self.hidden_size), dim=2)
-        #     else:
-        #         print('deal_bi Error')
-        # elif self.num_direction == 1:
-        #     pass
-        # else:
-        #     pass
+        # hidden = self.transform_en_hid(hidden.transpose(0,1).contiguous().view(batch_size, -1))
+        # hidden = hidden.view(batch_size, self.decoder_params[0], self.decoder_params[1]).transpose(0,1).contiguous()
+
+        if self.num_direction == 2:
+            hidden = hidden.view(self.num_layers, self.num_direction, batch_size, self.hidden_size)
+            if cell is not None:
+                cell = cell.view(self.num_layers, self.num_direction, batch_size, self.hidden_size)
+            # if self.deal_bi == 'linear':
+            #     hidden = self.linear_compress(hidden.transpose(1,2).contiguous().view(self.num_layers, batch_size, self.num_direction*self.hidden_size))
+            #     rnn_out = self.linear_compress(rnn_out)
+            #     if cell is not None:
+            #         cell = self.linear_compress_cell(cell.transpose(1,2).contiguous().view(self.num_layers, batch_size, self.num_direction*self.hidden_size))
+            # elif self.deal_bi == 'sum':
+            hidden = torch.sum(hidden, dim=1)
+            if cell is not None:
+                cell = torch.sum(cell, dim=1)
+            src_len_batch = rnn_out.size(1)
+            rnn_out = torch.sum(rnn_out.view(batch_size, src_len_batch, self.num_direction, self.hidden_size), dim=2)
+            # else:
+            #     print('deal_bi Error')
+        elif self.num_direction == 1:
+            pass
+        else:
+            pass
+        
         return rnn_out, hidden, cell #(bz, src_len, num_direction*hidden_size) (de_num_layers, bz, de_hidden_size) (num_layers*num_direction, bz, hidden_size)
 
     def initHidden(self, batch_size):

@@ -47,8 +47,9 @@ class DecoderAtten(nn.Module):
         self.hidden_size = hidden_size
         self.dropout = nn.Dropout(dropout_rate)
         self.num_layers = num_layers
-        #self.transform_en_hid = nn.Linear(np.prod(encoder_params), num_layers*hidden_size)
-        en_output_hz = encoder_params[1]*encoder_params[2]
+
+        en_output_hz = encoder_params[2]
+        assert(en_output_hz==hidden_size)
         if embedding_weight is not None:
             self.embedding = nn.Embedding.from_pretrained(embedding_weight, freeze=False)
         else:
