@@ -54,7 +54,7 @@ class EncoderRNN(nn.Module):
         #rnn_out, hidden = self.gru(embed, hidden)
         rnn_out, _ = torch.nn.utils.rnn.pad_packed_sequence(rnn_out, batch_first=True) #(bz, src_len, num_directions * hidden_size)
         hidden = self.transform_en_hid(hidden.transpose(0,1).contiguous().view(batch_size, -1))
-        hiiden = hidden.view(batch_size, self.decoder_params[0], self.decoder_params[1]).transpose(0,1).contiguous()
+        hidden = hidden.view(batch_size, self.decoder_params[0], self.decoder_params[1]).transpose(0,1).contiguous()
         # if self.num_direction == 2:
         #     hidden = hidden.view(self.num_layers, self.num_direction, batch_size, self.hidden_size)
         #     if cell is not None:
