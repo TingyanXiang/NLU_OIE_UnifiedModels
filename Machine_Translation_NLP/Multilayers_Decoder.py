@@ -4,40 +4,40 @@ import torch.nn.functional as F
 from config import embedding_freeze, att_concat_hz, device
 import numpy as np 
 
-class DecoderRNN(nn.Module):
-    def __init__(self, emb_size, hidden_size, vocab_size, num_layers, rnn_type = 'GRU', embedding_weight = None, dropout_rate = 0.1):
-        super(DecoderRNN, self).__init__()
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.dropout = nn.Dropout(dropout_rate)
-        if embedding_weight is not None:
-            self.embedding = nn.Embedding.from_pretrained(embedding_weight, freeze = embedding_freeze)
-        else:
-            self.embedding = nn.Embedding(vocab_size,emb_size)
-        self.rnn_type = rnn_type
-        if rnn_type == 'GRU':
-            self.gru = nn.GRU(emb_size, hidden_size, num_layers, batch_first=True, dropout = dropout_rate)
-        elif rnn_type == 'LSTM':
-            self.lstm = nn.LSTM(emb_size, hidden_size, num_layers, batch_first=True, dropout = dropout_rate)
-        else:
-            print('RNN TYPE ERROR')
-        self.out = nn.Linear(hidden_size, vocab_size)
-        self.logsoftmax = nn.LogSoftmax(dim=1)
+# class DecoderRNN(nn.Module):
+#     def __init__(self, emb_size, hidden_size, vocab_size, num_layers, rnn_type = 'GRU', embedding_weight = None, dropout_rate = 0.1):
+#         super(DecoderRNN, self).__init__()
+#         self.hidden_size = hidden_size
+#         self.num_layers = num_layers
+#         self.dropout = nn.Dropout(dropout_rate)
+#         if embedding_weight is not None:
+#             self.embedding = nn.Embedding.from_pretrained(embedding_weight, freeze = embedding_freeze)
+#         else:
+#             self.embedding = nn.Embedding(vocab_size,emb_size)
+#         self.rnn_type = rnn_type
+#         if rnn_type == 'GRU':
+#             self.gru = nn.GRU(emb_size, hidden_size, num_layers, batch_first=True, dropout = dropout_rate)
+#         elif rnn_type == 'LSTM':
+#             self.lstm = nn.LSTM(emb_size, hidden_size, num_layers, batch_first=True, dropout = dropout_rate)
+#         else:
+#             print('RNN TYPE ERROR')
+#         self.out = nn.Linear(hidden_size, vocab_size)
+#         self.logsoftmax = nn.LogSoftmax(dim=1)
 
-    def forward(self, tgt_input, hidden, true_len = None, encoder_outputs = None, cell = None):
-        output = self.embedding(tgt_input)
-        #print(output.size())
-        if self.rnn_type == 'GRU':
-            output, hidden = self.gru(output, hidden)
-        else:
-            output, (hidden, cell) = self.lstm(output,(hidden, cell))
-        logits = self.out(output.squeeze(1))
-        output = self.logsoftmax(logits)
-        return output, hidden, None, cell
+#     def forward(self, tgt_input, hidden, true_len = None, encoder_outputs = None, cell = None):
+#         output = self.embedding(tgt_input)
+#         #print(output.size())
+#         if self.rnn_type == 'GRU':
+#             output, hidden = self.gru(output, hidden)
+#         else:
+#             output, (hidden, cell) = self.lstm(output,(hidden, cell))
+#         logits = self.out(output.squeeze(1))
+#         output = self.logsoftmax(logits)
+#         return output, hidden, None, cell
 
-    # def initHidden(self, encoder_hidden):
-    #     batch_size = encoder_hidden.size(1)
-    #     return encoder_hidden.expand(self.num_layers, batch_size, self.hidden_size).contiguous()
+#     # def initHidden(self, encoder_hidden):
+#     #     batch_size = encoder_hidden.size(1)
+#     #     return encoder_hidden.expand(self.num_layers, batch_size, self.hidden_size).contiguous()
     
 
 class DecoderAtten(nn.Module):

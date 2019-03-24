@@ -64,6 +64,7 @@ def train(input_tensor, input_lengths, target_tensor, target_lengths,
         tgt_max_len_batch = target_lengths.cpu().max().item()
         assert(tgt_max_len_batch==target_tensor.size(1))
         while decoding_token_index < tgt_max_len_batch:
+            print(decoder_input.size(), decoder_hidden.size(), input_lengths.size(), encoder_outputs.size(), decoder_cell.size())
             decoder_output, decoder_hidden, decoder_attention, decoder_cell = decoder(
                 decoder_input, decoder_hidden, input_lengths, encoder_outputs, decoder_cell)
             loss += criterion(decoder_output, target_tensor[:,decoding_token_index])
