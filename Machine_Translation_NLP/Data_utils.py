@@ -1,12 +1,10 @@
 import numpy as np
 import time
 import os.path
-
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 from config import device, PAD_token, EOS_token
-
 import random
 
 
@@ -15,7 +13,6 @@ class VocabDataset(Dataset):
     Class that represents a train/validation/test dataset that's readable for PyTorch
     Note that this class inherits torch.utils.data.Dataset
     """
-
     def __init__(self, train_input, train_ouput, src_clip = None, tgt_clip = None):
         """
         @param data_list: list of character
