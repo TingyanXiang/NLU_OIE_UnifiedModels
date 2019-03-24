@@ -47,7 +47,7 @@ class DecoderAtten(nn.Module):
         self.hidden_size = hidden_size
         self.dropout = nn.Dropout(dropout_rate)
         self.num_layers = num_layers
-        self.transform_en_hid = nn.Linear(np.prod(encoder_params), num_layers*hidden_size)
+        #self.transform_en_hid = nn.Linear(np.prod(encoder_params), num_layers*hidden_size)
         en_output_hz = encoder_params[1]*encoder_params[2]
         if embedding_weight is not None:
             self.embedding = nn.Embedding.from_pretrained(embedding_weight, freeze=False)
@@ -83,14 +83,14 @@ class DecoderAtten(nn.Module):
         output = self.logsoftmax(logits)
         return output, hidden, atten_weight, cell
     
-    def initHidden(self, encoder_hidden):
-        batch_size = encoder_hidden.size(1)
+    def initHidden(self, batch_size):
+        # batch_size = encoder_hidden.size(1)
         #(en_num_layers*num_direction, bz, en_hidden_size) >> (bz, en_num_layers*num_direction*en_hidden_size)
-        encoder_hidden = encoder_hidden.transpose(0,1).contiguous().view(batch_size, -1)
-        hidden = self.transform_en_hid(encoder_hidden) #(bz, de_num_layers*de_hidden_size)
-        hidden = hidden.view(batch_size, self.num_layers, self.hidden_size).transpose(0,1).contiguous()
+        # encoder_hidden = encoder_hidden.transpose(0,1).contiguous().view(batch_size, -1)
+        # hidden = self.transform_en_hid(encoder_hidden) #(bz, de_num_layers*de_hidden_size)
+        # hidden = hidden.view(batch_size, self.num_layers, self.hidden_size).transpose(0,1).contiguous()
         cell = torch.zeros(self.num_layers, batch_size, self.hidden_size, device=device)
-        return hidden, cell #(de_num_layers, bz, de_hidden_size)
+        return cell #(de_num_layers, bz, de_hidden_size)
 
 class AttentionLayer(nn.Module):
     def __init__(self, q_hidden_size, m_hidden_size, atten_type):
@@ -131,7 +131,7 @@ class AttentionLayer(nn.Module):
     def atten_score(self, query, memory_bank):
         """
         query: (batch, tgt_length, q_hidden_size)
-        memory_bank: (batch, src_length, m_hidden_size2)
+        memory_bank: (batch, src_length, m_hidden_size)
         return: (batch, tgt_length, src_length)
         """
         batch_size, src_len, m_hidden_size = memory_bank.size()
@@ -150,7 +150,7 @@ class AttentionLayer(nn.Module):
             out = out.squeeze(-1).view(batch_size, query_len, src_len)
         else:
             print('mode out of bound')
-        return out
+        return out #(bz, query_len, src_len)
 
 def sequence_mask(lengths):
     batch_size = lengths.numel()

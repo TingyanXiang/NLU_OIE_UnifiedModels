@@ -39,7 +39,7 @@ def train(input_tensor, input_lengths, target_tensor, target_lengths,
     encoder_outputs, encoder_hidden, encoder_cell = encoder(input_tensor, encoder_hidden, input_lengths, encoder_cell)
 
     decoder_input = torch.tensor([[SOS_token]*batch_size], device=device).transpose(0,1)
-    decoder_hidden, decoder_cell = decoder.initHidden(encoder_hidden)
+    decoder_hidden, decoder_cell = encoder_hidden, decoder.initHidden(batch_size)
     #print(decoder_hidden.size())
     #print('encoddddddddddder finishhhhhhhhhhhhhhh')
     use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
@@ -273,12 +273,9 @@ def start_train(transtype, paras):
     embedding_src_weight = torch.from_numpy(srcLang.embedding_matrix).type(torch.FloatTensor).to(device)
     embedding_tgt_weight = torch.from_numpy(tgtLang.embedding_matrix).type(torch.FloatTensor).to(device)
     print(embedding_src_weight.size(), embedding_tgt_weight.size())
-    if attention_type:
-        encoder = EncoderRNN(srcLang.vocab_size, emb_size, en_hidden_size, en_num_layers, en_num_direction, rnn_type=rnn_type, embedding_weight=embedding_src_weight, dropout_rate=dropout_rate)
-        decoder = DecoderAtten(tgtLang.vocab_size, emb_size, de_hidden_size, de_num_layers, (en_num_layers, en_num_direction, en_hidden_size), rnn_type=rnn_type, embedding_weight=embedding_tgt_weight, atten_type=attention_type, dropout_rate=dropout_rate)
-    else:
-        encoder = EncoderRNN(srcLang.vocab_size, emb_size,hidden_size, num_layers, num_direction, deal_bi, rnn_type = rnn_type, embedding_weight = embedding_src_weight, dropout_rate = dropout_rate)
-        decoder = DecoderRNN(emb_size, hidden_size, tgtLang.vocab_size, num_layers, rnn_type = rnn_type, embedding_weight = embedding_tgt_weight, dropout_rate = dropout_rate)
+
+    encoder = EncoderRNN(srcLang.vocab_size, emb_size, en_hidden_size, en_num_layers, en_num_direction, (de_num_layers, de_hidden_size), rnn_type=rnn_type, embedding_weight=embedding_src_weight, dropout_rate=dropout_rate)
+    decoder = DecoderAtten(tgtLang.vocab_size, emb_size, de_hidden_size, de_num_layers, (en_num_layers, en_num_direction, en_hidden_size), rnn_type=rnn_type, embedding_weight=embedding_tgt_weight, atten_type=attention_type, dropout_rate=dropout_rate)
 
     
     encoder, decoder = encoder.to(device), decoder.to(device)

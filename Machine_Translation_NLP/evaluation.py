@@ -31,7 +31,7 @@ def evaluate_batch(loader, encoder, decoder, criterion, tgt_max_length, tgt_idx2
             encoder_hidden, encoder_cell = encoder.initHidden(batch_size)
             encoder_outputs, encoder_hidden, encoder_cell = encoder(input_tensor, encoder_hidden, input_lengths, encoder_cell)
             decoder_input = torch.tensor([[SOS_token]*batch_size], device=device).transpose(0,1)
-            decoder_hidden, decoder_cell = decoder.initHidden(encoder_hidden)
+            decoder_hidden, decoder_cell = encoder_hidden, decoder.initHidden(batch_size)
 
             decoding_token_index = 0
             loss = 0 
@@ -99,7 +99,7 @@ def evaluate_beam_batch(beam_size, loader, encoder, decoder, criterion, tgt_max_
             batch_size = input_tensor.size(0) #int 
             encoder_hidden,encoder_cell = encoder.initHidden(batch_size)
             encoder_outputs,encoder_hidden,encoder_cell = encoder(input_tensor, encoder_hidden, input_lengths, encoder_cell)
-            decoder_hidden, decoder_cell = decoder.initHidden(encoder_hidden)
+            decoder_hidden, decoder_cell = encoder_hidden, decoder.initHidden(batch_size)
 
             beamers = [beam.beam(beam_size, min_length=0, n_best=1) for i in range(batch_size)]
             encoder_max_len, en_output_hz= encoder_outputs.size(1), encoder_outputs.size(2)
