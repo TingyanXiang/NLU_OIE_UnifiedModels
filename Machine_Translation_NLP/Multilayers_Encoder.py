@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 from config import device, embedding_freeze
+import numpy as np 
 
 class EncoderRNN(nn.Module):
     #decoder_params = (de_num_layers, de_hidden_size)
