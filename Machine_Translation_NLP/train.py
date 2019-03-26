@@ -22,13 +22,13 @@ import pickle
 
 ####################Define Global Variable#########################
 
-def train(input_tensor, input_lengths, target_tensor, target_lengths,
-          encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, 
-          teacher_forcing_ratio):
+def train(src_data, tgt_data, encoder, decoder, encoder_optimizer, decoder_optimizer, teacher_forcing_ratio):
+    src_org_batch, src_tensor, src_true_len = src_data
+    tgt_org_batch, tgt_tensor, tgt_label_vocab, tgt_label_copy, tgt_true_len = tgt_data
     '''
     finish train for a batch
     '''
-    batch_size = input_tensor.size(0)
+    batch_size = src_tensor.size(0)
     encoder_hidden, encoder_cell = encoder.initHidden(batch_size)
     
     encoder.train()
@@ -38,7 +38,7 @@ def train(input_tensor, input_lengths, target_tensor, target_lengths,
     decoder_optimizer.zero_grad()
 
     loss = 0
-    encoder_outputs, encoder_hidden, encoder_cell = encoder(input_tensor, encoder_hidden, input_lengths, encoder_cell)
+    encoder_outputs, encoder_hidden, encoder_cell = encoder(src_tensor, encoder_hidden, src_true_len, encoder_cell)
 
     decoder_input = torch.tensor([[SOS_token]*batch_size], device=device).transpose(0,1)
     decoder_hidden, decoder_cell = encoder_hidden, decoder.initHidden(batch_size)
@@ -50,11 +50,11 @@ def train(input_tensor, input_lengths, target_tensor, target_lengths,
     if use_teacher_forcing:
         ### Teacher forcing: Feed the target as the next input
         decoding_token_index = 0
-        tgt_max_len_batch = target_lengths.cpu().max().item()
-        assert(tgt_max_len_batch==target_tensor.size(1))
+        tgt_max_len_batch = tgt_true_len.cpu().max().item()
+        assert(tgt_max_len_batch==tgt_tensor.size(1))
         while decoding_token_index < tgt_max_len_batch:
             decoder_output, decoder_hidden, decoder_attention, decoder_cell = decoder(
-                decoder_input, decoder_hidden, input_lengths, encoder_outputs, decoder_cell)
+                decoder_input, decoder_hidden, src_true_len, encoder_outputs, decoder_cell)
 
             decoding_label_vocab = tgt_label_vocab[:, decoding_token_index]
             decoding_label_copy = tgt_label_copy[:, decoding_token_index, :]
@@ -67,18 +67,18 @@ def train(input_tensor, input_lengths, target_tensor, target_lengths,
             combined_gen_and_copy = torch.cat((generation_log_probs, copy_log_probs), dim=-1)
             step_log_likelihood = torch.logsumexp(combined_gen_and_copy, dim=-1)
             step_log_likelihoods.append(step_log_likelihood.unsqueeze(1))
-            #loss += criterion(decoder_output, target_tensor[:,decoding_token_index])
-            decoder_input = target_tensor[:,decoding_token_index].unsqueeze(1)  # Teacher forcing
+            #loss += criterion(decoder_output, tgt_tensor[:,decoding_token_index])
+            decoder_input = tgt_tensor[:,decoding_token_index].unsqueeze(1)  # Teacher forcing
             decoding_token_index += 1
 
     else:
         ### Without teacher forcing: use its own predictions as the next input
         decoding_token_index = 0
-        tgt_max_len_batch = target_lengths.cpu().max().item()
-        assert(tgt_max_len_batch==target_tensor.size(1))
+        tgt_max_len_batch = tgt_true_len.cpu().max().item()
+        assert(tgt_max_len_batch==tgt_tensor.size(1))
         while decoding_token_index < tgt_max_len_batch:
             decoder_output, decoder_hidden, decoder_attention_weights, decoder_cell = decoder(
-                decoder_input, decoder_hidden, input_lengths, encoder_outputs, decoder_cell)
+                decoder_input, decoder_hidden, src_true_len, encoder_outputs, decoder_cell)
 
             decoding_label_vocab = tgt_label_vocab[:, decoding_token_index]
             decoding_label_copy = tgt_label_copy[:, decoding_token_index, :]
@@ -100,7 +100,7 @@ def train(input_tensor, input_lengths, target_tensor, target_lengths,
                 next_input_token = pred_list[next_input[i_batch].item()]
                 decoder_input.append(??get_index_vocab(next_input_token))
             decoder_input = torch.tensor(decoder_input, device=device).unsqueeze(1)
-            #loss += criterion(decoder_output, target_tensor[:,decoding_token_index])
+            #loss += criterion(decoder_output, tgt_tensor[:,decoding_token_index])
             #topv, topi = decoder_output.topk(1)
             #decoder_input = topi.detach()  # detach from history as input
             decoding_token_index += 1
@@ -118,7 +118,7 @@ def train(input_tensor, input_lengths, target_tensor, target_lengths,
     encoder_optimizer.step()
     decoder_optimizer.step()
 
-    return (loss*batch_size/tgt_pad_mask.sum()).item() #torch.div(loss, target_lengths.type_as(loss).mean()).item()  #/target_lengths.mean()
+    return (loss*batch_size/tgt_pad_mask.sum()).item() #torch.div(loss, tgt_true_len.type_as(loss).mean()).item()  #/tgt_true_len.mean()
 
 
 def trainIters(train_loader, val_loader, encoder, decoder, num_epochs, 
@@ -134,18 +134,18 @@ def trainIters(train_loader, val_loader, encoder, decoder, num_epochs,
         decoder.load_state_dict(check_point_state['decoder_state_dict'])
         decoder_optimizer.load_state_dict(check_point_state['decoder_optimizer_state_dict'])
 
-    criterion = nn.NLLLoss() #nn.NLLLoss(ignore_index=PAD_token)
+    #criterion = nn.NLLLoss() #nn.NLLLoss(ignore_index=PAD_token)
     max_val_bleu = 0
 
     for epoch in range(num_epochs): 
         n_iter = -1
         start_time = time.time()
-        for input_tensor, input_lengths, target_tensor, target_lengths in train_loader:
+        for src_org_batch, src_tensor, src_true_len, tgt_org_batch, tgt_tensor, tgt_label_vocab, tgt_label_copy, tgt_true_len in train_loader:
             n_iter += 1
             #print('start_step: ', n_iter)
-            loss = train(input_tensor, input_lengths, target_tensor, target_lengths, 
-                         encoder, decoder, encoder_optimizer, decoder_optimizer, 
-                         criterion, teacher_forcing_ratio)
+            src_data = (src_org_batch, src_tensor, src_true_len)
+            tgt_data = (tgt_org_batch, tgt_tensor, tgt_label_vocab, tgt_label_copy, tgt_true_len)
+            loss = train(src_data, tgt_data, encoder, decoder, encoder_optimizer, decoder_optimizer, teacher_forcing_ratio)
             if n_iter % 500 == 0:
                 #print('Loss:', loss)
                 #eva_start = time.time()

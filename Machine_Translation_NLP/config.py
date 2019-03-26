@@ -1,11 +1,16 @@
 import torch
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 PAD_token = 0
 SOS_token = 1
 EOS_token = 2
 UNK_token = 3
 vocab_prefix = ['<PAD>', '<SOS>', '<EOS>', '<UNK>']
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+vocab_pred = ['oov']
+vocab_pred_size = len(vocab_pred)
+oov_pred_index = 0
 
 embedding_freeze = False
 att_concat_hz = 64
@@ -25,16 +30,16 @@ att_concat_hz = 64
 #    src_emb = 'embedding/wiki.zh.vec',
 #    tgt_emb = 'embedding/wiki.en.vec'
 #)
-#
-address_book1 = dict(
-    train_src = 'Machine_Translation_NLP/iwsltzhen/iwslt-zh-en/train.tok.zh',
-    train_tgt = 'Machine_Translation_NLP/iwsltzhen/iwslt-zh-en/train.tok.en',
-    val_src = 'Machine_Translation_NLP/iwsltzhen/iwslt-zh-en/dev.tok.zh',
-    val_tgt = 'Machine_Translation_NLP/iwsltzhen/iwslt-zh-en/dev.tok.en',
-    src_emb = 'embedding/wiki.zh.vec',
-    tgt_emb = 'embedding/wiki.en.vec'
-)
-#
+# #
+# address_book1 = dict(
+#     train_src = 'Machine_Translation_NLP/iwsltzhen/iwslt-zh-en/train.tok.zh',
+#     train_tgt = 'Machine_Translation_NLP/iwsltzhen/iwslt-zh-en/train.tok.en',
+#     val_src = 'Machine_Translation_NLP/iwsltzhen/iwslt-zh-en/dev.tok.zh',
+#     val_tgt = 'Machine_Translation_NLP/iwsltzhen/iwslt-zh-en/dev.tok.en',
+#     src_emb = 'embedding/wiki.zh.vec',
+#     tgt_emb = 'embedding/wiki.en.vec'
+# )
+# #
 #address_book1 = dict(
 #    train_src = 'data/zh-en/train_sortByEn_10w.tok.zh',
 #    train_tgt = 'data/zh-en/train_sortByEn_10w.tok.en',
@@ -44,14 +49,14 @@ address_book1 = dict(
 #    tgt_emb = 'embedding/wiki.en.vec'
 #)
 #
-address_book = dict(
-    train_src = 'Machine_Translation_NLP/iwsltzhen/iwslt-vi-en/train.tok.vi',
-    train_tgt = 'Machine_Translation_NLP/iwsltzhen/iwslt-vi-en/train.tok.en',
-    val_src = 'Machine_Translation_NLP/iwsltzhen/iwslt-vi-en/dev.tok.vi',
-    val_tgt = 'Machine_Translation_NLP/iwsltzhen/iwslt-vi-en/dev.tok.en',
-    src_emb = 'embedding/wiki.vi.vec',
-    tgt_emb = 'embedding/wiki.en.vec'
-)
+# address_book = dict(
+#     train_src = 'Machine_Translation_NLP/iwsltzhen/iwslt-vi-en/train.tok.vi',
+#     train_tgt = 'Machine_Translation_NLP/iwsltzhen/iwslt-vi-en/train.tok.en',
+#     val_src = 'Machine_Translation_NLP/iwsltzhen/iwslt-vi-en/dev.tok.vi',
+#     val_tgt = 'Machine_Translation_NLP/iwsltzhen/iwslt-vi-en/dev.tok.en',
+#     src_emb = 'embedding/wiki.vi.vec',
+#     tgt_emb = 'embedding/wiki.en.vec'
+# )
 #address_book1 = dict(
 #    train_src = 'Machine_Translation_NLP/iwsltzhen/iwslt-zh-en/dev.tok.zh',
 #    train_tgt = 'Machine_Translation_NLP/iwsltzhen/iwslt-zh-en/dev.tok.en',
@@ -68,4 +73,4 @@ address_book = dict(
 #    src_emb = 'embedding/wiki.en.vec',
 #    tgt_emb = 'embedding/wiki.en.vec'
 #)
-#
+
