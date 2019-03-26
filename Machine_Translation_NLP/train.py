@@ -22,7 +22,6 @@ import pickle
 
 ####################Define Global Variable#########################
 
-
 def train(input_tensor, input_lengths, target_tensor, target_lengths,
           encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, 
           teacher_forcing_ratio):
@@ -32,6 +31,9 @@ def train(input_tensor, input_lengths, target_tensor, target_lengths,
     batch_size = input_tensor.size(0)
     encoder_hidden, encoder_cell = encoder.initHidden(batch_size)
     
+    encoder.train()
+    decoder.train()
+
     encoder_optimizer.zero_grad()
     decoder_optimizer.zero_grad()
 
@@ -116,7 +118,7 @@ def train(input_tensor, input_lengths, target_tensor, target_lengths,
     encoder_optimizer.step()
     decoder_optimizer.step()
 
-    return loss.item()/tgt_max_len_batch  #torch.div(loss, target_lengths.type_as(loss).mean()).item()  #/target_lengths.mean()
+    return (loss*batch_size/tgt_pad_mask.sum()).item() #torch.div(loss, target_lengths.type_as(loss).mean()).item()  #/target_lengths.mean()
 
 
 def trainIters(train_loader, val_loader, encoder, decoder, num_epochs, 
