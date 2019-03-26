@@ -22,65 +22,69 @@ def evaluate_batch(loader, encoder, decoder, criterion, tgt_max_length, tgt_idx2
     encoder.eval()
     decoder.eval()
 
-    loss_all = []
-    #tgt_sents_nltk = []
-    tgt_sents_sacre = []
-    #tgt_pred_sents_nltk = []
-    tgt_pred_sents_sacre = []
-    src_sents = []
+    tgt_pred = []
+    src_org = []
+    tgt_org = []
+    loss = 0
 
-    for input_tensor, input_lengths, target_tensor, target_lengths in loader:
-        batch_size = input_tensor.size(0)
+    for src_org_batch, src_tensor, src_true_len, tgt_org_batch, tgt_label_vocab, tgt_label_copy, tgt_true_len in loader:
+        batch_size = src_tensor.size(0)
         encoder_hidden, encoder_cell = encoder.initHidden(batch_size)
-        encoder_outputs, encoder_hidden, encoder_cell = encoder(input_tensor, encoder_hidden, input_lengths, encoder_cell)
-        decoder_input = torch.tensor([[SOS_token]*batch_size], device=device).transpose(0,1)
+        encoder_outputs, encoder_hidden, encoder_cell = encoder(src_tensor, encoder_hidden, src_true_len, encoder_cell)
+        decoder_input = torch.tensor([SOS_token]*batch_size, device=device).unsqueeze(1)
         decoder_hidden, decoder_cell = encoder_hidden, decoder.initHidden(batch_size)
 
         decoding_token_index = 0
-        loss = 0 
-        target_lengths_numpy = target_lengths.cpu().numpy()
+        step_log_likelihoods = []
+        tgt_pred_batch = [[]]*batch_size
+        #tgt_true_len_np = tgt_true_len.cpu().numpy()
         #sent_not_end_index = list(range(batch_size))
-        idx_token_pred = np.zeros((batch_size, tgt_max_length), dtype=np.int)
         while decoding_token_index < tgt_max_length:
-            decoder_output, decoder_hidden, _, decoder_cell = decoder(decoder_input, decoder_hidden, input_lengths, encoder_outputs,decoder_cell)
-            topv, topi = decoder_output.topk(1)
-            decoder_input = topi.detach()  # detach from history as input
-            idx_token_pred_step = decoder_input.cpu().squeeze(1).numpy()
-            idx_token_pred[:, decoding_token_index] = idx_token_pred_step
-            if decoding_token_index < target_lengths_numpy.max():
-                loss += criterion(decoder_output, target_tensor[:,decoding_token_index])
-            decoding_token_index += 1
-            end_or_not = idx_token_pred_step != EOS_token
-            sent_not_end_index = list(np.where(end_or_not)[0])
-            if len(sent_not_end_index) == 0:
-                break
+            decoder_output, decoder_hidden, _, decoder_cell = decoder(decoder_input, decoder_hidden, src_true_len, encoder_outputs, decoder_cell)
+            decoding_label_vocab = tgt_label_vocab[:, decoding_token_index]
+            decoding_label_copy = tgt_label_copy[:, decoding_token_index, :]
+            copy_log_probs = decoder_output[:, vocab_size_pred:]+(decoding_label_copy.float()+1e-45).log()
+            #mask sample which is copied only
+            gen_mask = ((decoding_label_vocab!=oov_pred_index) | (decoding_label_copy.sum(-1)==0)).float() 
+            log_gen_mask = (gen_mask + 1e-45).log().unsqueeze(-1)
+            #mask log_prob value for oov_pred_index when label_vocab==oov_pred_index and is copied 
+            generation_log_probs = decoder_output.gather(1, decoding_label_vocab.unsqueeze(1)) + log_gen_mask
+            combined_gen_and_copy = torch.cat((generation_log_probs, copy_log_probs), dim=-1)
+            step_log_likelihood = torch.logsumexp(combined_gen_and_copy, dim=-1)
+            step_log_likelihoods.append(step_log_likelihood.unsqueeze(1))
 
-        target_tensor_numpy = target_tensor.cpu().numpy()
-        input_tensor_numpy = input_tensor.cpu().numpy()
-        for i_batch in range(batch_size):
-            tgt_sent_tokens = fun_index2token(target_tensor_numpy[i_batch].tolist(), tgt_idx2words) #:target_lengths_numpy[i_batch]
-            #tgt_sents_nltk.append([tgt_sent_tokens])
-            tgt_sents_sacre.append(' '.join(tgt_sent_tokens))
-            tgt_pred_sent_tokens = fun_index2token(idx_token_pred[i_batch].tolist(), tgt_idx2words)
-            #tgt_pred_sents_nltk.append(tgt_pred_sent_tokens)
-            tgt_pred_sents_sacre.append(' '.join(tgt_pred_sent_tokens))
-            src_sent_tokens = fun_index2token(input_tensor_numpy[i_batch].tolist(), src_idx2words)
-            src_sents.append(' '.join(src_sent_tokens))
-        # if decoding_token_index == 0:
-        #     print('dddddddddd',src_sents[-1],tgt_sents[-1])
-        # if target_lengths == 0:
-        #     print('fffffffffff',src_sents[-1],tgt_sents[-1])
-        loss_all.append(loss.item()/decoding_token_index)
-    #nltk_bleu_score = bleu_score.corpus_bleu(tgt_sents_nltk, tgt_pred_sents_nltk)
-    sacre_bleu_score = sacrebleu.corpus_bleu(tgt_pred_sents_sacre, [tgt_sents_sacre], smooth='exp', smooth_floor=0.0, force=False, lowercase=False,
-        tokenize='none', use_effective_order=True)
-    loss = np.mean(loss_all)
+            topv, topi = copy_log_probs.topk(1, dim=-1)
+            next_input = topi.detach().cpu().squeeze(1)
+            decoder_input = []
+            stop_flag = [False]*batch_size
+            for i_batch in range(batch_size):
+                pred_list = vocab_pred+src_org_batch[i_batch]
+                next_input_token = pred_list[next_input[i_batch].item()]
+                if next_input_token == 'EOS':
+                    stop_flag[i_batch] = True
+                tgt_pred_batch[i_batch].append(next_input_token)
+                decoder_input.append(??vocab.get_index(next_input_token))
+            decoder_input = torch.tensor(decoder_input, device=device).unsqueeze(1)
+            decoding_token_index += 1
+            if all(stop_flag):
+                break
+        log_likelihoods = torch.cat(step_log_likelihoods, dim=-1)
+        # mask padding for tgt
+        tgt_pad_mask = sequence_mask(tgt_true_len).float()
+        log_likelihoods = log_likelihoods*tgt_pad_mask
+        loss += -(log_likelihoods.sum()/tgt_pad_mask.sum()).item()
+        tgt_pred.extend(tgt_pred_batch)
+        src_org.extend(src_org_batch)
+        tgt_org.extend(tgt_org_batch)
+
     if True:
-        random_sample = np.random.randint(len(tgt_pred_sents_sacre))
-        print('src:', src_sents[random_sample])
-        print('Ref: ', tgt_sents_sacre[random_sample])
-        print('pred: ', tgt_pred_sents_sacre[random_sample])
-    return sacre_bleu_score, None, loss
+        random_sample = np.random.randint(len(tgt_pred))
+        print('src:', src_org[random_sample])
+        print('Ref: ', tgt_org[random_sample])
+        print('pred: ', tgt_pred[random_sample])
+
+        
+    return 
 
 def evaluate_beam_batch(beam_size, loader, encoder, decoder, criterion, tgt_max_length, tgt_idx2words):
     """
@@ -198,7 +202,7 @@ def evaluate_single(data, encoder, decoder, criterion, tgt_max_length, tgt_idx2w
 
         decoding_token_index = 0
         loss = 0 
-        target_lengths_numpy = target_lengths.cpu().numpy()
+        tgt_true_len_np = target_lengths.cpu().numpy()
         #sent_not_end_index = list(range(batch_size))
         idx_token_pred = np.zeros((batch_size, tgt_max_length))
         while decoding_token_index < tgt_max_length:
@@ -207,7 +211,7 @@ def evaluate_single(data, encoder, decoder, criterion, tgt_max_length, tgt_idx2w
             decoder_input = topi.detach()  # detach from history as input
             idx_token_pred_step = decoder_input.cpu().squeeze(1).numpy()
             idx_token_pred[:, decoding_token_index] = idx_token_pred_step
-            if decoding_token_index < target_lengths_numpy.max():
+            if decoding_token_index < tgt_true_len_np.max():
                 loss += criterion(decoder_output, target_tensor[:,decoding_token_index])
             decoding_token_index += 1
             end_or_not = idx_token_pred_step != EOS_token
@@ -218,7 +222,7 @@ def evaluate_single(data, encoder, decoder, criterion, tgt_max_length, tgt_idx2w
         target_tensor_numpy = target_tensor.cpu().numpy()
         input_tensor_numpy = input_tensor.cpu().numpy()
         for i_batch in range(batch_size):
-            tgt_sent_tokens = fun_index2token(target_tensor_numpy[i_batch].tolist(), tgt_idx2words) #:target_lengths_numpy[i_batch]
+            tgt_sent_tokens = fun_index2token(target_tensor_numpy[i_batch].tolist(), tgt_idx2words) #:tgt_true_len_np[i_batch]
             #tgt_sents_nltk.append([tgt_sent_tokens])
             tgt_sents_sacre.append(' '.join(tgt_sent_tokens))
             tgt_pred_sent_tokens = fun_index2token(idx_token_pred[i_batch].tolist(), tgt_idx2words)
