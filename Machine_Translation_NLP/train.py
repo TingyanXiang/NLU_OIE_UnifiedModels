@@ -40,71 +40,75 @@ def train(input_tensor, input_lengths, target_tensor, target_lengths,
 
     decoder_input = torch.tensor([[SOS_token]*batch_size], device=device).transpose(0,1)
     decoder_hidden, decoder_cell = encoder_hidden, decoder.initHidden(batch_size)
+    step_log_likelihoods = []
     #print(decoder_hidden.size())
     #print('encoddddddddddder finishhhhhhhhhhhhhhh')
     use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
 
     if use_teacher_forcing:
-        #### Teacher forcing: Feed the target as the next input
-        # target_lengths = target_lengths.cpu().numpy()
-        # sent_not_end_index = list(range(batch_size))
-        # decoding_token_index = 0
-        # while len(sent_not_end_index) > 0:
-        #     decoder_output, decoder_hidden, decoder_attention = decoder(
-        #         decoder_input, decoder_hidden, input_lengths, encoder_outputs)
-        #     sent_not_end_index = torch.LongTensor(sent_not_end_index).to(device)
-        #     loss += criterion(decoder_output.index_select(0,sent_not_end_index), 
-        #                       target_tensor[:,decoding_token_index].index_select(0,sent_not_end_index))
-        #     decoder_input = target_tensor[:,decoding_token_index].unsqueeze(1)  # Teacher forcing
-        #     decoding_token_index += 1
-        #     end_or_not = target_lengths > decoding_token_index
-        #     sent_not_end_index = list(np.where(end_or_not)[0])
-        ### simple version; 
+        ### Teacher forcing: Feed the target as the next input
         decoding_token_index = 0
         tgt_max_len_batch = target_lengths.cpu().max().item()
         assert(tgt_max_len_batch==target_tensor.size(1))
         while decoding_token_index < tgt_max_len_batch:
-            print(decoder_input.size(), decoder_hidden.size(), input_lengths.size(), encoder_outputs.size(), decoder_cell.size())
             decoder_output, decoder_hidden, decoder_attention, decoder_cell = decoder(
                 decoder_input, decoder_hidden, input_lengths, encoder_outputs, decoder_cell)
-            loss += criterion(decoder_output, target_tensor[:,decoding_token_index])
+
+            decoding_label_vocab = tgt_label_vocab[:, decoding_token_index]
+            decoding_label_copy = tgt_label_copy[:, decoding_token_index, :]
+            copy_log_probs = decoder_output[:, vocab_size_pred:]+(decoding_label_copy.float()+1e-45).log()
+            #mask sample which is copied only
+            gen_mask = ((decoding_label_vocab!=oov_pred_index) | (decoding_label_copy.sum(-1)==0)).float() 
+            log_gen_mask = (gen_mask + 1e-45).log().unsqueeze(-1)
+            #mask log_prob value for oov_pred_index when label_vocab==oov_pred_index and is copied 
+            generation_log_probs = decoder_output.gather(1, decoding_label_vocab.unsqueeze(1)) + log_gen_mask
+            combined_gen_and_copy = torch.cat((generation_log_probs, copy_log_probs), dim=-1)
+            step_log_likelihood = torch.logsumexp(combined_gen_and_copy, dim=-1)
+            step_log_likelihoods.append(step_log_likelihood.unsqueeze(1))
+            #loss += criterion(decoder_output, target_tensor[:,decoding_token_index])
             decoder_input = target_tensor[:,decoding_token_index].unsqueeze(1)  # Teacher forcing
             decoding_token_index += 1
 
-
     else:
-        ### debug 
-        # # Without teacher forcing: use its own predictions as the next input
-        # target_lengths_numpy = target_lengths.cpu().numpy()
-        # sent_not_end_index = list(range(batch_size))
-        # decoding_token_index = 0
-        # while len(sent_not_end_index) > 0:
-        #     decoder_output, decoder_hidden, decoder_attention_weights = decoder(
-        #         decoder_input, decoder_hidden, input_lengths, encoder_outputs)
-        #     topv, topi = decoder_output.topk(1)
-        #     decoder_input = topi.detach()  # detach from history as input
-        #     #print(type(sent_not_end_index[0]))
-        #     sent_not_end_index = torch.LongTensor(sent_not_end_index).to(device)
-        #     loss += criterion(decoder_output.index_select(0,sent_not_end_index), 
-        #                       target_tensor[:,decoding_token_index].index_select(0,sent_not_end_index))
-        #     decoding_token_index += 1
-        #     end_or_not = target_lengths_numpy > decoding_token_index
-        #     #(target_lengths_numpy > decoding_token_index)*(decoder_input.squeeze().numpy() != EOS_token)
-        #     sent_not_end_index = list(np.where(end_or_not)[0])
-        ### simple version
+        ### Without teacher forcing: use its own predictions as the next input
         decoding_token_index = 0
         tgt_max_len_batch = target_lengths.cpu().max().item()
         assert(tgt_max_len_batch==target_tensor.size(1))
         while decoding_token_index < tgt_max_len_batch:
             decoder_output, decoder_hidden, decoder_attention_weights, decoder_cell = decoder(
                 decoder_input, decoder_hidden, input_lengths, encoder_outputs, decoder_cell)
-            loss += criterion(decoder_output, target_tensor[:,decoding_token_index])
-            topv, topi = decoder_output.topk(1)
-            decoder_input = topi.detach()  # detach from history as input
+
+            decoding_label_vocab = tgt_label_vocab[:, decoding_token_index]
+            decoding_label_copy = tgt_label_copy[:, decoding_token_index, :]
+            copy_log_probs = decoder_output[:, vocab_size_pred:]+(decoding_label_copy.float()+1e-45).log()
+            #mask sample which is copied only
+            gen_mask = ((decoding_label_vocab!=oov_pred_index) | (decoding_label_copy.sum(-1)==0)).float() 
+            log_gen_mask = (gen_mask + 1e-45).log().unsqueeze(-1)
+            #mask log_prob value for oov_pred_index when label_vocab==oov_pred_index and is copied 
+            generation_log_probs = decoder_output.gather(1, decoding_label_vocab.unsqueeze(1)) + log_gen_mask
+            combined_gen_and_copy = torch.cat((generation_log_probs, copy_log_probs), dim=-1)
+            step_log_likelihood = torch.logsumexp(combined_gen_and_copy, dim=-1)
+            step_log_likelihoods.append(step_log_likelihood.unsqueeze(1))
+
+            topv, topi = copy_log_probs.topk(1, dim=-1)
+            next_input = topi.detach().cpu().squeeze(1)
+            decoder_input = []
+            for i_batch in range(batch_size):
+                pred_list = vocab_pred+src_org_list[i_batch]
+                next_input_token = pred_list[next_input[i_batch].item()]
+                decoder_input.append(??get_index_vocab(next_input_token))
+            decoder_input = torch.tensor(decoder_input, device=device).unsqueeze(1)
+            #loss += criterion(decoder_output, target_tensor[:,decoding_token_index])
+            #topv, topi = decoder_output.topk(1)
+            #decoder_input = topi.detach()  # detach from history as input
             decoding_token_index += 1
 
     # average loss
-    #target_lengths.type_as(loss).mean()
+    log_likelihoods = torch.cat(step_log_likelihoods, dim=-1)
+    # mask padding for tgt
+    tgt_pad_mask = sequence_mask(tgt_true_len).float()
+    log_likelihoods = log_likelihoods*tgt_pad_mask
+    loss = -log_likelihoods.sum()/batch_size
     loss.backward()
 
     ### TODO

@@ -42,7 +42,7 @@ import numpy as np
 
 class DecoderAtten(nn.Module):
     # encoder_params = (en_num_layers, en_num_direction, en_hidden_size)
-    def __init__(self, vocab_size, emb_size, hidden_size, num_layers, encoder_params, rnn_type='GRU', embedding_weight=None, atten_type='dot_prod', dropout_rate=0.1):
+    def __init__(self, vocab_size_pred, emb_size, hidden_size, num_layers, encoder_params, rnn_type='GRU', embedding_weight=None, atten_type='dot_prod', dropout_rate=0.1):
         super(DecoderAtten, self).__init__()
         self.hidden_size = hidden_size
         self.dropout = nn.Dropout(dropout_rate)
@@ -63,8 +63,10 @@ class DecoderAtten(nn.Module):
         self.atten = AttentionLayer(hidden_size, en_output_hz, atten_type=atten_type)
         
         self.linear = nn.Linear(en_output_hz+hidden_size, hidden_size)
-        self.out = nn.Linear(hidden_size, vocab_size)
-        self.logsoftmax = nn.LogSoftmax(dim=1)
+
+        self.copy_mech = CopyMechanism(hidden_size, en_output_hz, vocab_size_pred)
+        # self.out = nn.Linear(hidden_size, vocab_size)
+        # self.logsoftmax = nn.LogSoftmax(dim=1)
 
     def forward(self, tgt_input, hidden, true_len, encoder_outputs, cell=None):
         output = self.embedding(tgt_input)
@@ -76,12 +78,18 @@ class DecoderAtten(nn.Module):
             output, (hidden, cell) = self.lstm(output, (hidden, cell))
         ### add attention
         atten_output, atten_weight = self.atten(output, encoder_outputs, true_len)
-        out1 = torch.cat((output, atten_output),-1)
+        out1 = torch.cat((output, atten_output), -1)
         out2 = self.linear(out1.squeeze(1))
         out2 = F.relu(out2)
-        logits = self.out(out2)
-        output = self.logsoftmax(logits)
-        return output, hidden, atten_weight, cell
+
+        # add copy mechanism here 
+        prob_scores = self.copy_mech(out2, encoder_outputs, true_len)
+
+
+        # logits = self.out(out2)
+        # output = self.logsoftmax(logits)
+
+        return prob_scores, hidden, atten_weight, cell
     
     def initHidden(self, batch_size):
         # batch_size = encoder_hidden.size(1)
@@ -156,3 +164,26 @@ def sequence_mask(lengths):
     batch_size = lengths.numel()
     max_len = lengths.max()
     return (torch.arange(0, max_len).type_as(lengths).repeat(batch_size,1).lt(lengths.unsqueeze(1)))
+
+class CopyMechanism(nn.Module):
+    def __init__(self, de_logits_hz, en_output_hz, vocab_size_pred):
+        super(AttentionLayer, self).__init__()
+        self.generate_linear = nn.Linear(hidden_size, vocab_size_pred)
+        self.copy_linear = nn.Linear(en_output_hz, de_logits_hz)
+        self.LogSoftmax = nn.LogSoftmax(dim=-1)
+
+
+    def forward(self, logits, encoder_outputs, true_len):
+        generation_scores = self.generate_linear(logits) #(bz, de_logits_hz)>>(bz, vocab_size_pred)
+        # remove sos and eos
+        encoder_out = F.tanh(self.copy_linear(encoder_outputs)) #(bz, src_sen_len, en_output_hz)>>(bz, src_sen_len, de_logits_hz)
+        copy_scores = torch.bmm(encoder_out, logits.unsqueeze(-1)).squeeze(-1) #(bz, src_sen_len)
+        # mask copy_scores for padding
+        mask_matrix = sequence_mask(true_len)
+        copy_scores.masked_fill_(1-mask_matrix, float('-inf'))
+        scores = torch.cat((generation_scores, copy_scores), dim=-1)
+        log_prob_scores = self.LogSoftmax(scores, dim=-1) #(bz, vocab_size_pred+src_sen_len)
+        return log_prob_scores
+
+
+
