@@ -3,8 +3,8 @@ import torch
 import numpy as np
 from nltk.translate import bleu_score 
 from config import SOS_token, EOS_token, PAD_token
-import sacrebleu
 import beam
+import difflib
 
 def fun_index2token(index_list, idx2words):
     token_list = []
@@ -27,7 +27,7 @@ def evaluate_batch(loader, encoder, decoder, criterion, tgt_max_length, tgt_idx2
     tgt_org = []
     loss = 0
 
-    for src_org_batch, src_tensor, src_true_len, tgt_org_batch, tgt_label_vocab, tgt_label_copy, tgt_true_len in loader:
+    for src_org_batch, src_tensor, src_true_len, tgt_org_batch, tgt_tensor, tgt_label_vocab, tgt_label_copy, tgt_true_len in loader:
         batch_size = src_tensor.size(0)
         encoder_hidden, encoder_cell = encoder.initHidden(batch_size)
         encoder_outputs, encoder_hidden, encoder_cell = encoder(src_tensor, encoder_hidden, src_true_len, encoder_cell)
@@ -76,15 +76,23 @@ def evaluate_batch(loader, encoder, decoder, criterion, tgt_max_length, tgt_idx2
         tgt_pred.extend(tgt_pred_batch)
         src_org.extend(src_org_batch)
         tgt_org.extend(tgt_org_batch)
-
+    eval_len = len(tgt_pred)
+    similarity_sent_scores = np.zeros((eval_len,))
+    similarity_facts_scores = np.zeros((eval_len,))
+    for i in range(eval_len):
+        similarity_sent_scores[i] = difflib.SequenceMatcher(None,tgt_org[i],tgt_pred[i]).ratio()
+        org_facts = tgt_org[i].split('$')
+        pred_facts = tgt_pred[i].split('$')
+        facts_similarity = []
+        for i_fact in range(min(len(org_facts), len(pred_facts))):
+            facts_similarity.append(difflib.SequenceMatcher(None,org_facts[i_fact],pred_facts[i_fact]).ratio())
+        similarity_facts_scores[i] = sum(facts_similarity)/max(len(org_facts), len(pred_facts))
     if True:
-        random_sample = np.random.randint(len(tgt_pred))
+        random_sample = np.random.randint(eval_len)
         print('src:', src_org[random_sample])
         print('Ref: ', tgt_org[random_sample])
         print('pred: ', tgt_pred[random_sample])
-
-        
-    return 
+    return similarity_facts_scores, similarity_sent_scores
 
 def evaluate_beam_batch(beam_size, loader, encoder, decoder, criterion, tgt_max_length, tgt_idx2words):
     """
