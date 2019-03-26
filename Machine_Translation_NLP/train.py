@@ -227,6 +227,7 @@ def start_train(transtype, paras):
         pickle.dump(model_hyparams, f)
     print(model_hyparams)
 
+    # read all data
     train_src = []
     with open(train_src_add) as f:
         for line in f:
@@ -247,8 +248,10 @@ def start_train(transtype, paras):
         for line in f:
             val_tgt.append(preposs_toekn(line[:-1].strip().split(' ')))
 
+
     print('The number of train samples: ', len(train_src))
     print('The number of val samples: ', len(val_src))
+    # build a common vocab both for src and tgt 
     srcLang = construct_Lang('src', src_max_vocab_size, address_book['src_emb'], train_src)
     tgtLang = construct_Lang('tgt', tgt_max_vocab_size, address_book['tgt_emb'], train_tgt)
     train_input_index = text2index(train_src, srcLang.word2index) #add EOS token here 
@@ -256,6 +259,10 @@ def start_train(transtype, paras):
     val_input_index = text2index(val_src, srcLang.word2index)
     val_output_index = text2index(val_tgt, tgtLang.word2index)
     ### save srcLang and tgtLang
+
+    #for src; keep original src_org and index based on vocab src_tensor
+
+    #for tgt; vocab_pred_label, copy_label
 
     train_dataset = VocabDataset(train_input_index,train_output_index, max_src_len_dataloader, max_tgt_len_dataloader)
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
