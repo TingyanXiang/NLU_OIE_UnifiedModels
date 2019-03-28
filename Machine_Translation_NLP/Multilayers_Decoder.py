@@ -167,8 +167,8 @@ def sequence_mask(lengths):
 
 class CopyMechanism(nn.Module):
     def __init__(self, de_logits_hz, en_output_hz, vocab_size_pred):
-        super(AttentionLayer, self).__init__()
-        self.generate_linear = nn.Linear(hidden_size, vocab_size_pred)
+        super(CopyMechanism, self).__init__()
+        self.generate_linear = nn.Linear(de_logits_hz, vocab_size_pred)
         self.copy_linear = nn.Linear(en_output_hz, de_logits_hz)
         self.LogSoftmax = nn.LogSoftmax(dim=-1)
 

@@ -6,7 +6,7 @@ from config import SOS_token, EOS_token, PAD_token
 import beam
 import difflib
 
-def evaluate_batch(loader, encoder, decoder, criterion, tgt_max_length, vocab):
+def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab):
     """
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")    
@@ -68,23 +68,42 @@ def evaluate_batch(loader, encoder, decoder, criterion, tgt_max_length, vocab):
         src_org.extend(src_org_batch)
         tgt_org.extend(tgt_org_batch)
     eval_len = len(tgt_pred)
-    similarity_sent_scores = np.zeros((eval_len,))
-    similarity_facts_scores = np.zeros((eval_len,))
+    precision = np.zeros((eval_len,))
+    recall = np.zeros((eval_len,))
     for i in range(eval_len):
-        similarity_sent_scores[i] = difflib.SequenceMatcher(None,tgt_org[i],tgt_pred[i]).ratio()
         org_facts = tgt_org[i].split('$')
         pred_facts = tgt_pred[i].split('$')
-        facts_similarity = []
-        for i_fact in range(min(len(org_facts), len(pred_facts))):
-            facts_similarity.append(difflib.SequenceMatcher(None,org_facts[i_fact],pred_facts[i_fact]).ratio())
-        similarity_facts_scores[i] = sum(facts_similarity)/max(len(org_facts), len(pred_facts))
+        org_facts_num = len(org_facts)
+        pred_facts_num = len(pred_facts)
+        org_match_num = np.zeros((org_facts_num))
+        pred_match_num = np.zeros((pred_facts_num))
+        for org_i in enumerate(org_facts):
+            for pred_i in enumerate(pred_facts):
+                org_fact = org_facts[org_i]
+                pred_fact = pred_facts[pred_i]
+                org_fact_ele = org_fact.split('@')
+                pred_fact_ele = pred_fact.split('@')
+                if len(org_fact_ele) == len(pred_fact_ele):
+                    ele_num = len(org_fact_ele)
+                    if difflib.SequenceMatcher(None,org_fact,pred_fact).ratio() > 0.85:
+                        org_match_num[org_i] += 1
+                        pred_match_num[pred_i] += 1
+                        break
+                    ele_sim = np.zeros((ele_num,))
+                    for ele_i in range(ele_num):
+                        ele_sim[ele_i] = difflib.SequenceMatcher(None,org_fact_ele[ele_i],pred_fact_ele[ele_i]).ratio()
+                    if ele_sim.mean() > 0.85:
+                        org_match_num[org_i] += 1
+                        pred_match_num[pred_i] += 1
+        precision[i] = pred_match_num.mean()
+        recall[i] = org_match_num.mean()
     if True:
         random_sample = np.random.randint(eval_len)
         print('src:', src_org[random_sample])
         print('Ref: ', tgt_org[random_sample])
         print('pred: ', tgt_pred[random_sample])
-    return similarity_facts_scores, similarity_sent_scores
-    
+    return precision, recall
+
 
 def evaluate_beam_batch(beam_size, loader, encoder, decoder, criterion, tgt_max_length, tgt_idx2words):
     """
