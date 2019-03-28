@@ -6,16 +6,7 @@ from config import SOS_token, EOS_token, PAD_token
 import beam
 import difflib
 
-def fun_index2token(index_list, idx2words):
-    token_list = []
-    for index in index_list:
-        if index == EOS_token:
-            break
-        else:
-            token_list.append(idx2words[index])
-    return token_list
-
-def evaluate_batch(loader, encoder, decoder, criterion, tgt_max_length, tgt_idx2words, src_idx2words):
+def evaluate_batch(loader, encoder, decoder, criterion, tgt_max_length, vocab):
     """
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")    
@@ -63,7 +54,7 @@ def evaluate_batch(loader, encoder, decoder, criterion, tgt_max_length, tgt_idx2
                 if next_input_token == 'EOS':
                     stop_flag[i_batch] = True
                 tgt_pred_batch[i_batch].append(next_input_token)
-                decoder_input.append(??vocab.get_index(next_input_token))
+                decoder_input.append(vocab.word2index.get(next_input_token, UNK_token))
             decoder_input = torch.tensor(decoder_input, device=device).unsqueeze(1)
             decoding_token_index += 1
             if all(stop_flag):
@@ -93,6 +84,7 @@ def evaluate_batch(loader, encoder, decoder, criterion, tgt_max_length, tgt_idx2
         print('Ref: ', tgt_org[random_sample])
         print('pred: ', tgt_pred[random_sample])
     return similarity_facts_scores, similarity_sent_scores
+    
 
 def evaluate_beam_batch(beam_size, loader, encoder, decoder, criterion, tgt_max_length, tgt_idx2words):
     """

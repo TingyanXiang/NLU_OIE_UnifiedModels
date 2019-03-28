@@ -22,7 +22,7 @@ import pickle
 
 ####################Define Global Variable#########################
 
-def train(src_data, tgt_data, encoder, decoder, encoder_optimizer, decoder_optimizer, teacher_forcing_ratio):
+def train(src_data, tgt_data, encoder, decoder, encoder_optimizer, decoder_optimizer, teacher_forcing_ratio, vocab):
     src_org_batch, src_tensor, src_true_len = src_data
     tgt_org_batch, tgt_tensor, tgt_label_vocab, tgt_label_copy, tgt_true_len = tgt_data
     '''
@@ -98,7 +98,7 @@ def train(src_data, tgt_data, encoder, decoder, encoder_optimizer, decoder_optim
             for i_batch in range(batch_size):
                 pred_list = vocab_pred+src_org_list[i_batch]
                 next_input_token = pred_list[next_input[i_batch].item()]
-                decoder_input.append(??get_index_vocab(next_input_token))
+                decoder_input.append(vocab.word2index.get(next_input_token, UNK_token))
             decoder_input = torch.tensor(decoder_input, device=device).unsqueeze(1)
             #loss += criterion(decoder_output, tgt_tensor[:,decoding_token_index])
             #topv, topi = decoder_output.topk(1)
@@ -122,7 +122,7 @@ def train(src_data, tgt_data, encoder, decoder, encoder_optimizer, decoder_optim
 
 
 def trainIters(train_loader, val_loader, encoder, decoder, num_epochs, 
-               learning_rate, teacher_forcing_ratio, srcLang, tgtLang, model_save_info, tgt_max_len, beam_size):
+               learning_rate, teacher_forcing_ratio, srcLang, tgtLang, model_save_info, tgt_max_len, beam_size, vocab):
 
     encoder_optimizer = optim.Adam(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.Adam(decoder.parameters(), lr=learning_rate)
@@ -145,11 +145,11 @@ def trainIters(train_loader, val_loader, encoder, decoder, num_epochs,
             #print('start_step: ', n_iter)
             src_data = (src_org_batch, src_tensor, src_true_len)
             tgt_data = (tgt_org_batch, tgt_tensor, tgt_label_vocab, tgt_label_copy, tgt_true_len)
-            loss = train(src_data, tgt_data, encoder, decoder, encoder_optimizer, decoder_optimizer, teacher_forcing_ratio)
+            loss = train(src_data, tgt_data, encoder, decoder, encoder_optimizer, decoder_optimizer, teacher_forcing_ratio, vocab)
             if n_iter % 500 == 0:
                 #print('Loss:', loss)
                 #eva_start = time.time()
-                val_bleu_sacre, val_bleu_nltk, val_loss = evaluate_batch(val_loader, encoder, decoder, criterion, tgt_max_len, tgtLang.index2word, srcLang.index2word)
+                val_bleu_sacre, val_bleu_nltk, val_loss = evaluate_batch(val_loader, encoder, decoder, tgt_max_len, vocab)
                 #print((time.time()-eva_start)/60)
                 print('epoch: [{}/{}], step: [{}/{}], train_loss:{}, val_bleu_sacre: {}, val_bleu_nltk: {}, val_loss: {}'.format(
                     epoch, num_epochs, n_iter, len(train_loader), loss, val_bleu_sacre[0], val_bleu_nltk, val_loss))
@@ -161,7 +161,7 @@ def trainIters(train_loader, val_loader, encoder, decoder, num_epochs,
                # for p in encoder.named_parameters():
                #     print(p[0], ': ',  p[1].grad.data.abs().mean().item(), p[1].grad.data.abs().max().item(), p[1].data.abs().mean().item(), p[1].data.abs().max().item(), end=' ')
                # print('\n')
-        val_bleu_sacre, val_bleu_nltk, val_loss = evaluate_batch(val_loader, encoder, decoder, criterion, tgt_max_len, tgtLang.index2word, srcLang.index2word)
+        val_bleu_sacre, val_bleu_nltk, val_loss = evaluate_batch(val_loader, encoder, decoder, tgt_max_len, vocab)
         print('epoch: [{}/{}] (Running time {:.3f} min), val_bleu_sacre: {}, val_bleu_nltk: {}, val_loss: {}'.format(epoch, num_epochs, (time.time()-start_time)/60, val_bleu_sacre, val_bleu_nltk, val_loss))
         #val_bleu_sacre_beam, _, _ = evaluate_beam_batch(beam_size, val_loader, encoder, decoder, criterion, tgt_max_len, tgtLang.index2word)
         #print('epoch: [{}/{}] (Running time {:.3f} min), val_bleu_sacre_beam: {}'.format(epoch, num_epochs, (time.time()-start_time)/60, val_bleu_sacre_beam))
