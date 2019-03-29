@@ -2,7 +2,7 @@
 import torch
 import numpy as np
 from nltk.translate import bleu_score 
-from config import SOS_token, EOS_token, PAD_token, oov_pred_index, vocab_pred
+from config import SOS_token, UNK_token, EOS_token, PAD_token, oov_pred_index, vocab_pred
 import beam
 import difflib
 
