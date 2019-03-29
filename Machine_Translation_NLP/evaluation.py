@@ -67,7 +67,7 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
         log_likelihoods = torch.cat(step_log_likelihoods, dim=-1)
         # mask padding for tgt
         tgt_pad_mask = sequence_mask(tgt_true_len).float()
-        log_likelihoods = log_likelihoods*tgt_pad_mask[:,:log_likelihoods.size(1)]g
+        log_likelihoods = log_likelihoods*tgt_pad_mask[:,:log_likelihoods.size(1)]
         loss += -(log_likelihoods.sum()/tgt_pad_mask.sum()).item()
         tgt_pred.extend(tgt_pred_batch)
         src_org.extend(src_org_batch)
