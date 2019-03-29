@@ -42,7 +42,7 @@ import numpy as np
 
 class DecoderAtten(nn.Module):
     # encoder_params = (en_num_layers, en_num_direction, en_hidden_size)
-    def __init__(self, vocab_size_pred, emb_size, hidden_size, num_layers, encoder_params, rnn_type='GRU', embedding_weight=None, atten_type='dot_prod', dropout_rate=0.1):
+    def __init__(self, vocab_size, vocab_size_pred, emb_size, hidden_size, num_layers, encoder_params, rnn_type='GRU', embedding_weight=None, atten_type='dot_prod', dropout_rate=0.1):
         super(DecoderAtten, self).__init__()
         self.hidden_size = hidden_size
         self.dropout = nn.Dropout(dropout_rate)
@@ -182,7 +182,7 @@ class CopyMechanism(nn.Module):
         mask_matrix = sequence_mask(true_len)
         copy_scores.masked_fill_(1-mask_matrix, float('-inf'))
         scores = torch.cat((generation_scores, copy_scores), dim=-1)
-        log_prob_scores = self.LogSoftmax(scores, dim=-1) #(bz, vocab_size_pred+src_sen_len)
+        log_prob_scores = self.LogSoftmax(scores) #(bz, vocab_size_pred+src_sen_len)
         return log_prob_scores
 
 

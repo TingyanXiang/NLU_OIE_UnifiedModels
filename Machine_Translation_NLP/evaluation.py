@@ -6,7 +6,7 @@ from config import SOS_token, EOS_token, PAD_token
 import beam
 import difflib
 
-def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab):
+def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_size):
     """
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")    
@@ -18,7 +18,7 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab):
     tgt_org = []
     loss = 0
 
-    for src_org_batch, src_tensor, src_true_len, tgt_org_batch, tgt_tensor, tgt_label_vocab, tgt_label_copy, tgt_true_len in loader:
+    for src_tensor, src_true_len, tgt_tensor, tgt_true_len, tgt_label_vocab, tgt_label_copy, src_org_batch, tgt_org_batch in loader:
         batch_size = src_tensor.size(0)
         encoder_hidden, encoder_cell = encoder.initHidden(batch_size)
         encoder_outputs, encoder_hidden, encoder_cell = encoder(src_tensor, encoder_hidden, src_true_len, encoder_cell)
