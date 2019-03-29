@@ -3,15 +3,16 @@ import torch
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 vocab_prefix = ['<PAD>', '<UNK>', '<EOS>', '<SOS>']
+UNK_token = 1
 SOS_token = 3
 
-vocab_pred = ['<PAD>','<OOV>','<EOS>','ISA','DESC','IN','BIRTH',
-"DEATH", "=", "$", "[","]","|","X","Y","Z","P","@"]
+vocab_pred = ['<PAD>','<OOV>','<EOS>','ISA','DESC','IN','BIRTH',"DEATH", 
+"=", "$", "[", "]", "|", "X", "Y", "Z", "P", "@", "&"]
 vocab_pred_size = len(vocab_pred)
+
 oov_pred_index = 1 
 
 PAD_token = 0
-UNK_token = 1
 EOS_token = 2
 
 embedding_freeze = False

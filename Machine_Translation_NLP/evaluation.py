@@ -82,8 +82,8 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
         pred_facts_num = len(pred_facts)
         org_match_num = np.zeros((org_facts_num))
         pred_match_num = np.zeros((pred_facts_num))
-        for org_i in enumerate(org_facts):
-            for pred_i in enumerate(pred_facts):
+        for org_i in range(org_facts_num):
+            for pred_i in range(pred_facts_num):
                 org_fact = org_facts[org_i]
                 pred_fact = pred_facts[pred_i]
                 org_fact_ele = org_fact.split('@')
