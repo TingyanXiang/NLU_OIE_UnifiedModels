@@ -2,7 +2,7 @@
 import torch
 import numpy as np
 from nltk.translate import bleu_score 
-from config import SOS_token, EOS_token, PAD_token, oov_pred_index
+from config import SOS_token, EOS_token, PAD_token, oov_pred_index, vocab_pred
 import beam
 import difflib
 
@@ -51,7 +51,7 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
             for i_batch in range(batch_size):
                 pred_list = vocab_pred+src_org_batch[i_batch]
                 next_input_token = pred_list[next_input[i_batch].item()]
-                if next_input_token == 'EOS':
+                if next_input_token == vocab_pred[EOS_token]:
                     stop_flag[i_batch] = True
                 tgt_pred_batch[i_batch].append(next_input_token)
                 decoder_input.append(vocab.word2index.get(next_input_token, UNK_token))
