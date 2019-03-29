@@ -34,7 +34,7 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
             decoder_output, decoder_hidden, _, decoder_cell = decoder(decoder_input, decoder_hidden, src_true_len, encoder_outputs, decoder_cell)
             decoding_label_vocab = tgt_label_vocab[:, decoding_token_index]
             decoding_label_copy = tgt_label_copy[:, decoding_token_index, :]
-            copy_log_probs = decoder_output[:, vocab_size_pred:]+(decoding_label_copy.float()+1e-45).log()
+            copy_log_probs = decoder_output[:, vocab_pred_size:]+(decoding_label_copy.float()+1e-45).log()
             #mask sample which is copied only
             gen_mask = ((decoding_label_vocab!=oov_pred_index) | (decoding_label_copy.sum(-1)==0)).float() 
             log_gen_mask = (gen_mask + 1e-45).log().unsqueeze(-1)
