@@ -29,22 +29,26 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
         decoding_token_index = 0
         step_log_likelihoods = []
         tgt_pred_batch = [[]]*batch_size
-        #tgt_true_len_np = tgt_true_len.cpu().numpy()
+        tgt_true_len_max = tgt_true_len.cpu().numpy().max()
         #sent_not_end_index = list(range(batch_size))
         while decoding_token_index < tgt_max_length:
             decoder_output, decoder_hidden, _, decoder_cell = decoder(decoder_input, decoder_hidden, src_true_len, encoder_outputs, decoder_cell)
-            decoding_label_vocab = tgt_label_vocab[:, decoding_token_index]
-            decoding_label_copy = tgt_label_copy[:, decoding_token_index, :]
-            copy_log_probs = decoder_output[:, vocab_pred_size:]+(decoding_label_copy.float()+1e-45).log()
-            #mask sample which is copied only
-            gen_mask = ((decoding_label_vocab!=oov_pred_index) | (decoding_label_copy.sum(-1)==0)).float() 
-            log_gen_mask = (gen_mask + 1e-45).log().unsqueeze(-1)
-            #mask log_prob value for oov_pred_index when label_vocab==oov_pred_index and is copied 
-            generation_log_probs = decoder_output.gather(1, decoding_label_vocab.unsqueeze(1)) + log_gen_mask
-            combined_gen_and_copy = torch.cat((generation_log_probs, copy_log_probs), dim=-1)
-            step_log_likelihood = torch.logsumexp(combined_gen_and_copy, dim=-1)
-            step_log_likelihoods.append(step_log_likelihood.unsqueeze(1))
+            
+            # compute loss 
+            if decoder_token_index < tgt_true_len_max:
+                decoding_label_vocab = tgt_label_vocab[:, decoding_token_index]
+                decoding_label_copy = tgt_label_copy[:, decoding_token_index, :]
+                copy_log_probs = decoder_output[:, vocab_pred_size:]+(decoding_label_copy.float()+1e-45).log()
+                #mask sample which is copied only
+                gen_mask = ((decoding_label_vocab!=oov_pred_index) | (decoding_label_copy.sum(-1)==0)).float() 
+                log_gen_mask = (gen_mask + 1e-45).log().unsqueeze(-1)
+                #mask log_prob value for oov_pred_index when label_vocab==oov_pred_index and is copied 
+                generation_log_probs = decoder_output.gather(1, decoding_label_vocab.unsqueeze(1)) + log_gen_mask
+                combined_gen_and_copy = torch.cat((generation_log_probs, copy_log_probs), dim=-1)
+                step_log_likelihood = torch.logsumexp(combined_gen_and_copy, dim=-1)
+                step_log_likelihoods.append(step_log_likelihood.unsqueeze(1))
 
+            #
             topv, topi = copy_log_probs.topk(1, dim=-1)
             next_input = topi.detach().cpu().squeeze(1)
             decoder_input = []
@@ -63,7 +67,7 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
         log_likelihoods = torch.cat(step_log_likelihoods, dim=-1)
         # mask padding for tgt
         tgt_pad_mask = sequence_mask(tgt_true_len).float()
-        log_likelihoods = log_likelihoods*tgt_pad_mask[:,:log_likelihoods.size(1)]
+        log_likelihoods = log_likelihoods*tgt_pad_mask[:,:log_likelihoods.size(1)]g
         loss += -(log_likelihoods.sum()/tgt_pad_mask.sum()).item()
         tgt_pred.extend(tgt_pred_batch)
         src_org.extend(src_org_batch)
