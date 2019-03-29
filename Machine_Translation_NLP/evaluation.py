@@ -35,7 +35,7 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
             decoder_output, decoder_hidden, _, decoder_cell = decoder(decoder_input, decoder_hidden, src_true_len, encoder_outputs, decoder_cell)
             
             # compute loss 
-            if decoder_token_index < tgt_true_len_max:
+            if decoding_token_index < tgt_true_len_max:
                 decoding_label_vocab = tgt_label_vocab[:, decoding_token_index]
                 decoding_label_copy = tgt_label_copy[:, decoding_token_index, :]
                 copy_log_probs = decoder_output[:, vocab_pred_size:]+(decoding_label_copy.float()+1e-45).log()
@@ -67,7 +67,7 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
         log_likelihoods = torch.cat(step_log_likelihoods, dim=-1)
         # mask padding for tgt
         tgt_pad_mask = sequence_mask(tgt_true_len).float()
-        log_likelihoods = log_likelihoods*tgt_pad_mask[:,:log_likelihoods.size(1)]
+        log_likelihoods = log_likelihoods*tgt_pad_mask[:,:log_likelihoods.size(1)]g
         loss += -(log_likelihoods.sum()/tgt_pad_mask.sum()).item()
         tgt_pred.extend(tgt_pred_batch)
         src_org.extend(src_org_batch)
