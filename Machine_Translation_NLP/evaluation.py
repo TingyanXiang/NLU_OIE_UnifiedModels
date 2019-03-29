@@ -76,8 +76,8 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
     precision = np.zeros((eval_len,))
     recall = np.zeros((eval_len,))
     for i in range(eval_len):
-        org_facts = tgt_org[i].split('$')
-        pred_facts = tgt_pred[i].split('$')
+        org_facts = ''.join(tgt_org[i]).split('$')
+        pred_facts = ''.join(tgt_pred[i]).split('$')
         org_facts_num = len(org_facts)
         pred_facts_num = len(pred_facts)
         org_match_num = np.zeros((org_facts_num))
