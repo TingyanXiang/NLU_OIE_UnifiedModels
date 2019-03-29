@@ -102,7 +102,7 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
         print('src:', src_org[random_sample])
         print('Ref: ', tgt_org[random_sample])
         print('pred: ', tgt_pred[random_sample])
-    return precision, recall
+    return precision, recall, loss
 
 
 def evaluate_beam_batch(beam_size, loader, encoder, decoder, criterion, tgt_max_length, tgt_idx2words):
