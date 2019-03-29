@@ -5,6 +5,7 @@ from nltk.translate import bleu_score
 from config import SOS_token, UNK_token, EOS_token, PAD_token, oov_pred_index, vocab_pred
 import beam
 import difflib
+from Multilayers_Decoder import sequence_mask
 
 def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_size):
     """
