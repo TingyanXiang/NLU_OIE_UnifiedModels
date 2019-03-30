@@ -176,7 +176,7 @@ class CopyMechanism(nn.Module):
     def forward(self, logits, encoder_outputs, true_len):
         generation_scores = self.generate_linear(logits) #(bz, de_logits_hz)>>(bz, vocab_size_pred)
         # remove sos and eos
-        encoder_out = F.tanh(self.copy_linear(encoder_outputs)) #(bz, src_sen_len, en_output_hz)>>(bz, src_sen_len, de_logits_hz)
+        encoder_out = torch.tanh(self.copy_linear(encoder_outputs)) #(bz, src_sen_len, en_output_hz)>>(bz, src_sen_len, de_logits_hz)
         copy_scores = torch.bmm(encoder_out, logits.unsqueeze(-1)).squeeze(-1) #(bz, src_sen_len)
         # mask copy_scores for padding
         mask_matrix = sequence_mask(true_len)
