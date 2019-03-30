@@ -1,7 +1,6 @@
 # config:
 import torch
 import numpy as np
-from nltk.translate import bleu_score 
 from config import SOS_token, UNK_token, EOS_token, PAD_token, oov_pred_index, vocab_pred
 import beam
 import difflib
@@ -102,7 +101,7 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
                         pred_match_num[pred_i] += 1
         precision[i] = pred_match_num.mean()
         recall[i] = org_match_num.mean()
-    if True:
+    if False:
         random_sample = np.random.randint(eval_len)
         print('src:', src_org[random_sample])
         print('Ref: ', tgt_org[random_sample])
