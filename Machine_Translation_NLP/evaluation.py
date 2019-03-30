@@ -57,7 +57,8 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
                 next_input_token = pred_list[next_input[i_batch].item()]
                 if next_input_token == vocab_pred[EOS_token]:
                     stop_flag[i_batch] = True
-                tgt_pred_batch[i_batch].append(next_input_token)
+                if stop_flag[i_batch] is False:
+                    tgt_pred_batch[i_batch].append(next_input_token)
                 decoder_input.append(vocab.word2index.get(next_input_token, UNK_token))
             decoder_input = torch.tensor(decoder_input, device=device).unsqueeze(1)
             decoding_token_index += 1
@@ -71,6 +72,7 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
         tgt_pred.extend(tgt_pred_batch)
         src_org.extend(src_org_batch)
         tgt_org.extend(tgt_org_batch)
+    loss = loss/len(loader)
     eval_len = len(tgt_pred)
     precision = np.zeros((eval_len,))
     recall = np.zeros((eval_len,))
