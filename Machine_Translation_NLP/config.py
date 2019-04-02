@@ -3,17 +3,20 @@ import torch
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 vocab_prefix = ['<PAD>', '<UNK>', '<EOS>', '<SOS>']
-UNK_token = 1
-SOS_token = 3
+PAD_index = vocab_prefix.index('<PAD>')
+UNK_index = vocab_prefix.index('<UNK>')
+EOS_index = vocab_prefix.index('<EOS>')
+SOS_index = vocab_prefix.index('<SOS>') 
 
-vocab_pred = ['<PAD>','<OOV>','<EOS>','ISA','DESC','IN','BIRTH',"DEATH", 
-"=", "$", "[", "]", "|", "X", "Y", "Z", "P", "@", "&"]
+#vocab_pred = ['<PAD>','<OOV>','<EOS>','ISA','DESC','IN','BIRTH',"DEATH", 
+#"=", "$", "[", "]", "|", "X", "Y", "Z", "P", "@", "&"]
+vocab_pred = ['<PAD>','<OOV>','<EOS>','ISA','DESC','IN','BIRTH',"DEATH",
+"=", "$", "[", "]", "|", "X", "Y", "Z", "P", "@", "&", "_"]
 vocab_pred_size = len(vocab_pred)
 
-oov_pred_index = 1 
-
-PAD_token = 0
-EOS_token = 2
+OOV_pred_index = vocab_pred.index('<OOV>')
+PAD_pred_index = vocab_pred.index('<PAD>')
+EOS_pred_index = vocab_pred.index('<EOS>')
 
 embedding_freeze = False
 att_concat_hz = 64

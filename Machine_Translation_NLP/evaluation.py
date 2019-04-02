@@ -1,8 +1,8 @@
 # config:
 import torch
 import numpy as np
-from config import SOS_token, UNK_token, EOS_token, PAD_token, oov_pred_index, vocab_pred
-import beam
+from config import SOS_index, UNK_index, EOS_index, PAD_index, OOV_pred_index, EOS_pred_index, vocab_pred
+#import beam
 import difflib
 from Multilayers_Decoder import sequence_mask
 
@@ -22,13 +22,14 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
         batch_size = src_tensor.size(0)
         encoder_hidden, encoder_cell = encoder.initHidden(batch_size)
         encoder_outputs, encoder_hidden, encoder_cell = encoder(src_tensor, encoder_hidden, src_true_len, encoder_cell)
-        decoder_input = torch.tensor([SOS_token]*batch_size, device=device).unsqueeze(1)
+        decoder_input = torch.tensor([SOS_index]*batch_size, device=device).unsqueeze(1)
         decoder_hidden, decoder_cell = encoder_hidden, decoder.initHidden(batch_size)
 
         decoding_token_index = 0
         step_log_likelihoods = []
-        tgt_pred_batch = [[]]*batch_size
+        tgt_pred_batch = [[] for i_batch in range(batch_size)]
         tgt_true_len_max = tgt_true_len.cpu().numpy().max()
+        stop_flag = [False]*batch_size
         #sent_not_end_index = list(range(batch_size))
         while decoding_token_index < tgt_max_length:
             decoder_output, decoder_hidden, _, decoder_cell = decoder(decoder_input, decoder_hidden, src_true_len, encoder_outputs, decoder_cell)
@@ -39,9 +40,9 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
                 decoding_label_copy = tgt_label_copy[:, decoding_token_index, :]
                 copy_log_probs = decoder_output[:, vocab_pred_size:]+(decoding_label_copy.float()+1e-45).log()
                 #mask sample which is copied only
-                gen_mask = ((decoding_label_vocab!=oov_pred_index) | (decoding_label_copy.sum(-1)==0)).float() 
+                gen_mask = ((decoding_label_vocab!=OOV_pred_index) | (decoding_label_copy.sum(-1)==0)).float() 
                 log_gen_mask = (gen_mask + 1e-45).log().unsqueeze(-1)
-                #mask log_prob value for oov_pred_index when label_vocab==oov_pred_index and is copied 
+                #mask log_prob value for OOV_pred_index when label_vocab==OOV_pred_index and is copied 
                 generation_log_probs = decoder_output.gather(1, decoding_label_vocab.unsqueeze(1)) + log_gen_mask
                 combined_gen_and_copy = torch.cat((generation_log_probs, copy_log_probs), dim=-1)
                 step_log_likelihood = torch.logsumexp(combined_gen_and_copy, dim=-1)
@@ -51,19 +52,20 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
             topv, topi = copy_log_probs.topk(1, dim=-1)
             next_input = topi.detach().cpu().squeeze(1)
             decoder_input = []
-            stop_flag = [False]*batch_size
             for i_batch in range(batch_size):
+                #print(''.join(src_org_batch[i_batch]), ''.join(tgt_org_batch[i_batch]))
                 pred_list = vocab_pred+src_org_batch[i_batch]
                 next_input_token = pred_list[next_input[i_batch].item()]
-                if next_input_token == vocab_pred[EOS_token]:
+                if next_input_token == vocab_pred[EOS_pred_index]:
                     stop_flag[i_batch] = True
                 if stop_flag[i_batch] is False:
                     tgt_pred_batch[i_batch].append(next_input_token)
-                decoder_input.append(vocab.word2index.get(next_input_token, UNK_token))
+                decoder_input.append(vocab.word2index.get(next_input_token, UNK_index))
             decoder_input = torch.tensor(decoder_input, device=device).unsqueeze(1)
             decoding_token_index += 1
             if all(stop_flag):
                 break
+        #print(src_org_batch[0], '\n', tgt_org_batch[0], '\n', tgt_pred_batch[0])
         log_likelihoods = torch.cat(step_log_likelihoods, dim=-1)
         # mask padding for tgt
         tgt_pad_mask = sequence_mask(tgt_true_len).float()
@@ -103,7 +105,7 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
                         pred_match_num[pred_i] += 1
         precision[i] = pred_match_num.mean()
         recall[i] = org_match_num.mean()
-    if True:
+    if False:
         random_sample = np.random.randint(eval_len)
         print('src:', src_org[random_sample])
         print('Ref: ', tgt_org[random_sample])
