@@ -49,12 +49,12 @@ def evaluate_batch(loader, encoder, decoder, tgt_max_length, vocab, vocab_pred_s
                 step_log_likelihoods.append(step_log_likelihood.unsqueeze(1))
 
             #
-            topv, topi = copy_log_probs.topk(1, dim=-1)
+            topv, topi = decoder_output.topk(1, dim=-1)
             next_input = topi.detach().cpu().squeeze(1)
             decoder_input = []
             for i_batch in range(batch_size):
                 #print(''.join(src_org_batch[i_batch]), ''.join(tgt_org_batch[i_batch]))
-                pred_list = vocab_pred+src_org_batch[i_batch]
+                pred_list = vocab_pred+src_org_batch[i_batch]+['<EOS>']
                 next_input_token = pred_list[next_input[i_batch].item()]
                 if next_input_token == vocab_pred[EOS_pred_index]:
                     stop_flag[i_batch] = True
