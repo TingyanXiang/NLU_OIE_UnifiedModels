@@ -31,7 +31,7 @@ def check_fact_same(org_fact, pred_fact):
             return True
     return False
 
-def predict_facts(loader, encoder, decoder, tgt_max_length):
+def predict_facts(loader, encoder, decoder, tgt_max_length, vocab):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")    
     encoder.eval()
     decoder.eval()
@@ -81,7 +81,7 @@ def predict_facts(loader, encoder, decoder, tgt_max_length):
                     stop_flag[i_batch] = True
                 if not stop_flag[i_batch]:
                     tgt_pred_batch[i_batch].append(next_input_token)
-                decoder_input.append(trainLang.word2index.get(next_input_token, UNK_index))
+                decoder_input.append(vocab.word2index.get(next_input_token, UNK_index))
             decoder_input = torch.tensor(decoder_input, device=device).unsqueeze(1)
             decoding_token_index += 1
             if all(stop_flag):
