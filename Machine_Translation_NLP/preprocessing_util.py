@@ -1,127 +1,99 @@
 import numpy as np
 from config import *
 from collections import Counter
+import re
+import json
+import jieba
 
-def preposs_toekn(tokens):
-    return [token for token in tokens if token != '']
-
-def load_emb_vectors(fasttest_home):
-    max_num_load = 500000
-    words_dict = {}
-    with open(fasttest_home) as f:
-        for num_row, line in enumerate(f):
-            if num_row >= max_num_load:
-                break
-            s = line.split()
-            words_dict[s[0]] = np.asarray(s[1:])
-    return words_dict
-# def read_embedding(fasttest_home = './wiki-news-300d-1M.vec', words_to_load = 10000):
-#     words_ft = {}
-#     idx2words_ft = {}
+def replaceMisspred(predicate):
+    '''replace missing predicate
+    '''
+    if predicate == '_':
+        return 'P'
+    else:
+        return predicate
     
-#     words_ft['$PAD$'] = PAD_token
-#     idx2words_ft[PAD_token] = '$PAD$'
-#     words_ft['$SOS$'] = SOS_token
-#     idx2words_ft[SOS_token] = '$SOS$'
-#     words_ft['$EOS$'] = EOS_token
-#     idx2words_ft[EOS_token] = '$EOS$'
-#     words_ft['$UNK$'] = UNK_token
-#     idx2words_ft[UNK_token] = '$UNK$'
-    
-#     with open(fasttest_home) as f:
-#         loaded_embeddings_ft = np.zeros((words_to_load, 300)) 
-#         ordered_words_ft = []
-#         # f.readline()
-#         for i, line in enumerate(f):
-#             i = i+4
-#             if i >= words_to_load: 
-#                 break
-#             s = line.split()
-#             try:
-#                 loaded_embeddings_ft[i, :] = np.asarray(s[1:])
-#             except:
-#                 print('')
-                
-#             words_ft[s[0]] = i
-#             idx2words_ft[i] = s[0]
-#             ordered_words_ft.append(s[0])
-    
-#     return words_ft,idx2words_ft,loaded_embeddings_ft.astype(np.float32)
+def character_segmentation(string):
+    res = []
+    for part in list(jieba.cut(string, cut_all=False)):
+        if re.match('^[\da-zA-Z]+$', part):
+            res.append(part)
+        else:
+            res.extend(list(part))
+    return res
 
-class Lang:
-    def __init__(self, name, max_vocab_size, emb_pretrained_add):
-        self.name = name
-        self.word2index = None #{"$PAD$": PAD_token, "$SOS$": SOS_token, "$EOS$": EOS_token, "$UNK$": UNK_token}
-        #self.word2count = None #{"$PAD$": 0, "$SOS$" : 0, "$EOS$": 0, "$UNK$": 0}
-        self.index2word = None #{PAD_token: "$PAD$", SOS_token: "$SOS$", EOS_token: "$EOS$", UNK_token: "$UNK$"}
-        self.max_vocab_size = max_vocab_size  # Count SOS and EOS
-        self.vocab_size = None
-        self.emb_pretrained_add = emb_pretrained_add
-        self.embedding_matrix = None
-
-    def build_vocab(self, train_data):
-        all_tokens = []
-        for sent in train_data:
-            all_tokens.extend(sent)
-        token_counter = Counter(all_tokens)
-        print('The number of unique tokens totally in train data: ', len(token_counter))
-        vocab, count = zip(*token_counter.most_common(self.max_vocab_size))
-        self.index2word = vocab_prefix + list(vocab)
-        word2index = dict(zip(vocab, range(len(vocab_prefix),len(vocab_prefix)+len(vocab)))) 
-        for idx, token in enumerate(vocab_prefix):
-            word2index[token] = idx
-        self.word2index = word2index
-        return None 
-
-    def build_emb_weight(self):
-        words_emb_dict = load_emb_vectors(self.emb_pretrained_add)
-        vocab_size = len(self.index2word)
-        self.vocab_size = vocab_size
-        emb_weight = np.zeros([vocab_size, 300])
-        for i in range(len(vocab_prefix), vocab_size):
-            emb = words_emb_dict.get(self.index2word[i], None)
-            if emb is not None:
-                try:
-                    emb_weight[i] = emb
-                except:
-                    pass
-                    #print(len(emb), self.index2word[i], emb)
-        self.embedding_matrix = emb_weight
-        return None
-
-    # def addSentence(self, sentence):
-    #     for word in sentence.split(' '):
-    #         self.addWord(word)
-
-    # def addWord(self, word):
-    #     if word not in self.word2index:
-    #         self.word2index[word] = self.n_words
-    #         self.word2count[word] = 1
-    #         self.index2word[self.n_words] = word
-    #         self.n_words += 1
-    #     else:
-    #         self.word2count[word] += 1
-    
-    # def load_embedding(self, address, words_to_load):
-    #     self.word2index, self.index2word, self.embedding_matrix = read_embedding(address, words_to_load)
+def load_preprocess_data(data_add):
+    saoke = []
+    with open(data_add, 'r') as f:
+        for line in f:
+            saoke.append(json.loads(line))
+    data = []
+    # list of dict
+    for sample in saoke:
+        # remove some exceptions with empty facts
+        if sample['logic'] == []:
+            continue
+        # tokenize src sentence
+        sample_processed = dict()
+        sample_processed['src_org'] = sample['natural']
+        #sample_processed['src'] = list(jieba.cut(sample['natural'], cut_all=False))
+        sample_processed['src'] = character_segmentation(sample['natural'])
         
-def text2index(data, word2index):
+        # transform fact list into str and tokenize
+        # $ separates facts; @ separate elements for one fact; & separate objects for one fact
+        sample_processed['tgt_org'] = sample['logic']
+        logic_list = []
+        for fact in sample['logic']:
+            logic_list.append('@'.join([fact['subject'], replaceMisspred(fact['predicate']), 
+                                       '&'.join(fact['object'])]))
+        logic_str = '$'.join(logic_list)
+        sample_processed['tgt'] = character_segmentation(logic_str)
+        #list(jieba.cut(logic_str, cut_all=False))
+
+        data.append(sample_processed)
+    return data
+
+    def text2index(data, key, word2index):
+    '''
+    transform tokens into index as input for both src and tgt
+    '''
     indexdata = []
     for line in data:
-        indexdata.append([word2index[c] if c in word2index.keys() else UNK_token for c in line])
-        #indexdata[-1].append(EOS_token)
-    print('finish')
+        line = line[key]
+        indexdata.append([word2index[c] if c in word2index.keys() else UNK_index for c in line])
+        #indexdata[-1].append(EOS_index)
+    print('finish indexing')
     return indexdata
 
-def construct_Lang(name, max_vocab_size, emb_pretrained_add, train_data):
-    lang = Lang(name, max_vocab_size, emb_pretrained_add)
-    lang.build_vocab(train_data)
-    lang.build_emb_weight()
+def construct_Lang(name, data, emb_pretrained_add = None, max_vocab_size = None):
+    lang = Lang(name, emb_pretrained_add, max_vocab_size)
+    lang.build_vocab(data)
+    if emb_pretrained_add:
+        lang.build_emb_weight()
     return lang
 
-# def preparelang(name, data):
-#     lang = Lang(name)
-#     for line in data:
-#         for word in line:
-#             lang.addWord(word)
-#     return lang
+def text2symbolindex(data, key, word2index):
+    '''get generation label for tgt 
+    '''
+    indexdata = []
+    for line in data:
+        line = line[key]
+        indexdata.append([word2index[c] if c in word2index.keys() else OOV_pred_index for c in line])
+        #indexdata[-1].append(EOS_index)
+    print('symbol label finish')
+    return indexdata
+
+def copy_indicator(data, src_key='src', tgt_key='tgt'):
+    '''get copy label for tgt
+    '''
+    indicator = []
+    for sample in data:
+        tgt = sample[tgt_key]
+        src = sample[src_key]
+        matrix = np.zeros((len(tgt), len(src)), dtype=int)
+        for m in range(len(tgt)):
+            for n in range(len(src)):
+                if tgt[m] == src[n]:
+                    matrix[m,n] = 1
+        indicator.append(matrix)
+    return indicator
