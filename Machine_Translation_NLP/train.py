@@ -1,19 +1,28 @@
-import numpy as np
+import json
+import pandas as pd
 import time
+import numpy as np 
+from sklearn.model_selection import train_test_split
+import jieba
+import re
 import os
 import torch.nn as nn
 import torch
 from torch import optim
-from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
-from Data_utils import VocabDataset, vocab_collate_func
-from preprocessing_util import preposs_toekn, Lang, text2index, construct_Lang
+
+from config import vocab_pred, vocab_pred_size, vocab_prefix
+from config import UNK_index, PAD_index, SOS_index, EOS_index 
+from config import OOV_pred_index, PAD_pred_index, EOS_pred_index
+
+# from Data_utils import VocabDataset, vocab_collate_func
+from preprocessing_util import load_preprocess_data, construct_Lang, text2symbolindex, text2index, copy_indicator
 from Multilayers_Encoder import EncoderRNN
-from Multilayers_Decoder import DecoderRNN, DecoderAtten
-from config import device, PAD_token, SOS_token, EOS_token, UNK_token, embedding_freeze, vocab_prefix
+from Multilayers_Decoder import DecoderAtten, sequence_mask
+from config import device, embedding_freeze
 import random
-from evaluation import evaluate_batch, evaluate_beam_batch
-import pickle 
+from evaluation import similarity_score, check_fact_same, predict_facts, evaluate_prediction
+import pickle
 
 ####################Define Global Variable#########################
 
@@ -22,164 +31,8 @@ import pickle
 
 ####################Define Global Variable#########################
 
-def train(src_data, tgt_data, encoder, decoder, encoder_optimizer, decoder_optimizer, teacher_forcing_ratio, vocab):
-    src_org_batch, src_tensor, src_true_len = src_data
-    tgt_org_batch, tgt_tensor, tgt_label_vocab, tgt_label_copy, tgt_true_len = tgt_data
-    '''
-    finish train for a batch
-    '''
-    batch_size = src_tensor.size(0)
-    encoder_hidden, encoder_cell = encoder.initHidden(batch_size)
-    
-    encoder.train()
-    decoder.train()
-
-    encoder_optimizer.zero_grad()
-    decoder_optimizer.zero_grad()
-
-    loss = 0
-    encoder_outputs, encoder_hidden, encoder_cell = encoder(src_tensor, encoder_hidden, src_true_len, encoder_cell)
-
-    decoder_input = torch.tensor([[SOS_token]*batch_size], device=device).transpose(0,1)
-    decoder_hidden, decoder_cell = encoder_hidden, decoder.initHidden(batch_size)
-    step_log_likelihoods = []
-    #print(decoder_hidden.size())
-    #print('encoddddddddddder finishhhhhhhhhhhhhhh')
-    use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
-
-    if use_teacher_forcing:
-        ### Teacher forcing: Feed the target as the next input
-        decoding_token_index = 0
-        tgt_max_len_batch = tgt_true_len.cpu().max().item()
-        assert(tgt_max_len_batch==tgt_tensor.size(1))
-        while decoding_token_index < tgt_max_len_batch:
-            decoder_output, decoder_hidden, decoder_attention, decoder_cell = decoder(
-                decoder_input, decoder_hidden, src_true_len, encoder_outputs, decoder_cell)
-
-            decoding_label_vocab = tgt_label_vocab[:, decoding_token_index]
-            decoding_label_copy = tgt_label_copy[:, decoding_token_index, :]
-            copy_log_probs = decoder_output[:, vocab_size_pred:]+(decoding_label_copy.float()+1e-45).log()
-            #mask sample which is copied only
-            gen_mask = ((decoding_label_vocab!=oov_pred_index) | (decoding_label_copy.sum(-1)==0)).float() 
-            log_gen_mask = (gen_mask + 1e-45).log().unsqueeze(-1)
-            #mask log_prob value for oov_pred_index when label_vocab==oov_pred_index and is copied 
-            generation_log_probs = decoder_output.gather(1, decoding_label_vocab.unsqueeze(1)) + log_gen_mask
-            combined_gen_and_copy = torch.cat((generation_log_probs, copy_log_probs), dim=-1)
-            step_log_likelihood = torch.logsumexp(combined_gen_and_copy, dim=-1)
-            step_log_likelihoods.append(step_log_likelihood.unsqueeze(1))
-            #loss += criterion(decoder_output, tgt_tensor[:,decoding_token_index])
-            decoder_input = tgt_tensor[:,decoding_token_index].unsqueeze(1)  # Teacher forcing
-            decoding_token_index += 1
-
-    else:
-        ### Without teacher forcing: use its own predictions as the next input
-        decoding_token_index = 0
-        tgt_max_len_batch = tgt_true_len.cpu().max().item()
-        assert(tgt_max_len_batch==tgt_tensor.size(1))
-        while decoding_token_index < tgt_max_len_batch:
-            decoder_output, decoder_hidden, decoder_attention_weights, decoder_cell = decoder(
-                decoder_input, decoder_hidden, src_true_len, encoder_outputs, decoder_cell)
-
-            decoding_label_vocab = tgt_label_vocab[:, decoding_token_index]
-            decoding_label_copy = tgt_label_copy[:, decoding_token_index, :]
-            copy_log_probs = decoder_output[:, vocab_size_pred:]+(decoding_label_copy.float()+1e-45).log()
-            #mask sample which is copied only
-            gen_mask = ((decoding_label_vocab!=oov_pred_index) | (decoding_label_copy.sum(-1)==0)).float() 
-            log_gen_mask = (gen_mask + 1e-45).log().unsqueeze(-1)
-            #mask log_prob value for oov_pred_index when label_vocab==oov_pred_index and is copied 
-            generation_log_probs = decoder_output.gather(1, decoding_label_vocab.unsqueeze(1)) + log_gen_mask
-            combined_gen_and_copy = torch.cat((generation_log_probs, copy_log_probs), dim=-1)
-            step_log_likelihood = torch.logsumexp(combined_gen_and_copy, dim=-1)
-            step_log_likelihoods.append(step_log_likelihood.unsqueeze(1))
-
-            topv, topi = copy_log_probs.topk(1, dim=-1)
-            next_input = topi.detach().cpu().squeeze(1)
-            decoder_input = []
-            for i_batch in range(batch_size):
-                pred_list = vocab_pred+src_org_list[i_batch]
-                next_input_token = pred_list[next_input[i_batch].item()]
-                decoder_input.append(vocab.word2index.get(next_input_token, UNK_token))
-            decoder_input = torch.tensor(decoder_input, device=device).unsqueeze(1)
-            #loss += criterion(decoder_output, tgt_tensor[:,decoding_token_index])
-            #topv, topi = decoder_output.topk(1)
-            #decoder_input = topi.detach()  # detach from history as input
-            decoding_token_index += 1
-
-    # average loss
-    log_likelihoods = torch.cat(step_log_likelihoods, dim=-1)
-    # mask padding for tgt
-    tgt_pad_mask = sequence_mask(tgt_true_len).float()
-    log_likelihoods = log_likelihoods*tgt_pad_mask
-    loss = -log_likelihoods.sum()/batch_size
-    loss.backward()
-
-    ### TODO
-    # clip for gradient exploding 
-    encoder_optimizer.step()
-    decoder_optimizer.step()
-
-    return (loss*batch_size/tgt_pad_mask.sum()).item() #torch.div(loss, tgt_true_len.type_as(loss).mean()).item()  #/tgt_true_len.mean()
 
 
-def trainIters(train_loader, val_loader, encoder, decoder, num_epochs, 
-               learning_rate, teacher_forcing_ratio, srcLang, tgtLang, model_save_info, tgt_max_len, beam_size, vocab):
-
-    encoder_optimizer = optim.Adam(encoder.parameters(), lr=learning_rate)
-    decoder_optimizer = optim.Adam(decoder.parameters(), lr=learning_rate)
-
-    if model_save_info['model_path_for_resume'] is not None:
-        check_point_state = torch.load(model_save_info['model_path_for_resume'])
-        encoder.load_state_dict(check_point_state['encoder_state_dict'])
-        encoder_optimizer.load_state_dict(check_point_state['encoder_optimizer_state_dict'])
-        decoder.load_state_dict(check_point_state['decoder_state_dict'])
-        decoder_optimizer.load_state_dict(check_point_state['decoder_optimizer_state_dict'])
-
-    #criterion = nn.NLLLoss() #nn.NLLLoss(ignore_index=PAD_token)
-    max_val_bleu = 0
-
-    for epoch in range(num_epochs): 
-        n_iter = -1
-        start_time = time.time()
-        for src_org_batch, src_tensor, src_true_len, tgt_org_batch, tgt_tensor, tgt_label_vocab, tgt_label_copy, tgt_true_len in train_loader:
-            n_iter += 1
-            #print('start_step: ', n_iter)
-            src_data = (src_org_batch, src_tensor, src_true_len)
-            tgt_data = (tgt_org_batch, tgt_tensor, tgt_label_vocab, tgt_label_copy, tgt_true_len)
-            loss = train(src_data, tgt_data, encoder, decoder, encoder_optimizer, decoder_optimizer, teacher_forcing_ratio, vocab)
-            if n_iter % 500 == 0:
-                #print('Loss:', loss)
-                #eva_start = time.time()
-                val_bleu_sacre, val_bleu_nltk, val_loss = evaluate_batch(val_loader, encoder, decoder, tgt_max_len, vocab)
-                #print((time.time()-eva_start)/60)
-                print('epoch: [{}/{}], step: [{}/{}], train_loss:{}, val_bleu_sacre: {}, val_bleu_nltk: {}, val_loss: {}'.format(
-                    epoch, num_epochs, n_iter, len(train_loader), loss, val_bleu_sacre[0], val_bleu_nltk, val_loss))
-               # print('Decoder parameters grad:')
-               # for p in decoder.named_parameters():
-               #     print(p[0], ': ',  p[1].grad.data.abs().mean().item(), p[1].grad.data.abs().max().item(), p[1].data.abs().mean().item(), p[1].data.abs().max().item(), end=' ')
-               # print('\n')
-               # print('Encoder Parameters grad:')
-               # for p in encoder.named_parameters():
-               #     print(p[0], ': ',  p[1].grad.data.abs().mean().item(), p[1].grad.data.abs().max().item(), p[1].data.abs().mean().item(), p[1].data.abs().max().item(), end=' ')
-               # print('\n')
-        val_bleu_sacre, val_bleu_nltk, val_loss = evaluate_batch(val_loader, encoder, decoder, tgt_max_len, vocab)
-        print('epoch: [{}/{}] (Running time {:.3f} min), val_bleu_sacre: {}, val_bleu_nltk: {}, val_loss: {}'.format(epoch, num_epochs, (time.time()-start_time)/60, val_bleu_sacre, val_bleu_nltk, val_loss))
-        #val_bleu_sacre_beam, _, _ = evaluate_beam_batch(beam_size, val_loader, encoder, decoder, criterion, tgt_max_len, tgtLang.index2word)
-        #print('epoch: [{}/{}] (Running time {:.3f} min), val_bleu_sacre_beam: {}'.format(epoch, num_epochs, (time.time()-start_time)/60, val_bleu_sacre_beam))
-        if max_val_bleu < val_bleu_sacre.score:
-            max_val_bleu = val_bleu_sacre.score
-            ### TODO save best model
-        if (epoch+1) % model_save_info['epochs_per_save_model'] == 0:
-            check_point_state = {
-                'epoch': epoch,
-                'encoder_state_dict': encoder.state_dict(),
-                'encoder_optimizer_state_dict': encoder_optimizer.state_dict(),
-                'decoder_state_dict': decoder.state_dict(),
-                'decoder_optimizer_state_dict': decoder_optimizer.state_dict()
-                }
-            torch.save(check_point_state, '{}epoch_{}.pth'.format(model_save_info['model_path'], epoch))
-
-    return None
-    
 
 def start_train(transtype, paras):
     src_max_vocab_size = paras['src_max_vocab_size']

@@ -105,6 +105,8 @@ def evaluate_prediction(tgt_org, tgt_pred):
     for i in range(eval_len):
         org_facts = ''.join(tgt_org[i]).split('$')
         pred_facts = ''.join(tgt_pred[i]).split('$')
+        # remove duplicates
+        pred_facts = list(set(pred_facts))
         org_facts_num = len(org_facts)
         pred_facts_num = len(pred_facts)
         org_match_num = np.zeros((org_facts_num))
@@ -125,8 +127,6 @@ def evaluate_prediction(tgt_org, tgt_pred):
         precision[i] = pred_match_num.mean()
         recall[i] = org_match_num.mean()
     return precision, recall
-
-
 
 
 
