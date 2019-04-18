@@ -3,16 +3,15 @@ import torch.nn as nn
 import math
 from copy import deepcopy
 from .seq2seq_base import Seq2Seq
-from seq2seq.tools.config import PAD
 from .modules.state import State
 from .modules.transformer_blocks import EncoderBlock, DecoderBlock, EncoderBlockPreNorm, DecoderBlockPreNorm, positional_embedding, CharWordEmbedder
-
+from config import PAD_index, vocab_pred_size
 
 class TransformerAttentionEncoder(nn.Module):
 
     def __init__(self, vocab_size, hidden_size=512, embedding_size=None,
                  num_layers=6, num_heads=8, inner_linear=2048, inner_groups=1, prenormalized=False,
-                 mask_symbol=PAD, layer_norm=True, weight_norm=False, dropout=0, embedder=None):
+                 mask_symbol=PAD_index, layer_norm=True, weight_norm=False, dropout=0, embedder=None):
 
         super(TransformerAttentionEncoder, self).__init__()
         embedding_size = embedding_size or hidden_size
@@ -24,7 +23,7 @@ class TransformerAttentionEncoder(nn.Module):
         self.batch_first = True
         self.mask_symbol = mask_symbol
         self.embedder = embedder or nn.Embedding(
-            vocab_size, embedding_size, padding_idx=PAD)
+            vocab_size, embedding_size, padding_idx=PAD_index)
         self.scale_embedding = hidden_size ** 0.5
         self.dropout = nn.Dropout(dropout, inplace=True)
         if prenormalized:
@@ -67,7 +66,7 @@ class TransformerAttentionDecoder(nn.Module):
 
     def __init__(self, vocab_size, hidden_size=512, embedding_size=None, num_layers=6,
                  num_heads=8, dropout=0, inner_linear=2048, inner_groups=1, prenormalized=False, stateful=False, state_dim=None,
-                 mask_symbol=PAD, tie_embedding=True, layer_norm=True, weight_norm=False, embedder=None, classifier=True):
+                 mask_symbol=PAD_index, tie_embedding=True, layer_norm=True, weight_norm=False, embedder=None, classifier_type=None):
 
         super(TransformerAttentionDecoder, self).__init__()
         embedding_size = embedding_size or hidden_size
@@ -78,7 +77,7 @@ class TransformerAttentionDecoder(nn.Module):
         self.batch_first = True
         self.mask_symbol = mask_symbol
         self.embedder = embedder or nn.Embedding(
-            vocab_size, embedding_size, padding_idx=PAD)
+            vocab_size, embedding_size, padding_idx=PAD_index)
         self.scale_embedding = hidden_size ** 0.5
         self.dropout = nn.Dropout(dropout, inplace=True)
         self.stateful = stateful
@@ -100,8 +99,8 @@ class TransformerAttentionDecoder(nn.Module):
         if layer_norm and prenormalized:
             self.lnorm = nn.LayerNorm(hidden_size)
         
-        self.classifier = classifier
-        if classifier:
+        self.classifier_type = classifier_type
+        if classifier_type == 'normal':
             self.classifier = nn.Linear(embedding_size, vocab_size)
             if tie_embedding:
                 self.embedder.weight = self.classifier.weight
@@ -115,6 +114,11 @@ class TransformerAttentionDecoder(nn.Module):
                     nn.init.kaiming_uniform_(
                         self.output_projection, a=math.sqrt(5))
             self.logsoftmax = nn.LogSoftmax(dim=-1)
+        elif classifier_type == 'copy':
+            self.classifier = CopyMechanism(hidden_size, hidden_size, vocab_pred_size)
+        else:
+            self.classifier = None
+
 
     def forward(self, inputs, state, get_attention=False):
         context = state.context
@@ -157,9 +161,13 @@ class TransformerAttentionDecoder(nn.Module):
 
         if hasattr(self, 'output_projection'):
             x = x @ self.output_projection.t()
-        if self.classifier is not None:
+        if self.classifier_type == 'normal'
             x = self.classifier(x)
             x = self.logsoftmax(x)
+        elif self.classifier_type == 'copy':
+            x = self.classifier(x, context)
+        else:
+            pass
         
         if self.stateful:
             state.hidden = tuple(updated_state)
@@ -169,6 +177,31 @@ class TransformerAttentionDecoder(nn.Module):
         if get_attention:
             state.attention_score = attention_scores
         return x, state
+
+def sequence_mask(lengths):
+    batch_size = lengths.numel()
+    max_len = lengths.max()
+    return (torch.arange(0, max_len).type_as(lengths).repeat(batch_size,1).lt(lengths.unsqueeze(1)))
+
+class CopyMechanism(nn.Module):
+    def __init__(self, de_logits_hz, en_output_hz, vocab_size_pred):
+        super(CopyMechanism, self).__init__()
+        self.generate_linear = nn.Linear(de_logits_hz, vocab_size_pred)
+        self.copy_linear = nn.Linear(en_output_hz, de_logits_hz)
+        self.LogSoftmax = nn.LogSoftmax(dim=-1)
+
+    def forward(self, logits, context):
+        encoder_outputs = context.outputs
+        generation_scores = self.generate_linear(logits) #(bz, de_logits_hz)>>(bz, vocab_size_pred)
+        # remove sos and eos
+        encoder_out = torch.tanh(self.copy_linear(encoder_outputs)) #(bz, src_sen_len, en_output_hz)>>(bz, src_sen_len, de_logits_hz)
+        copy_scores = torch.bmm(encoder_out, logits.unsqueeze(-1)).squeeze(-1) #(bz, src_sen_len)
+        # mask copy_scores for padding
+        mask_matrix = context.mask
+        copy_scores.masked_fill_(mask_matrix, float('-inf'))
+        scores = torch.cat((generation_scores, copy_scores), dim=-1)
+        log_prob_scores = self.LogSoftmax(scores) #(bz, vocab_size_pred+src_sen_len)
+        return log_prob_scores
 
 
 class Transformer(Seq2Seq):
