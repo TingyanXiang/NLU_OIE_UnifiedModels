@@ -206,6 +206,9 @@ class CopyMechanism(nn.Module):
         log_prob_scores = self.LogSoftmax(scores) #(bz, vocab_size_pred+src_sen_len)
         return log_prob_scores
 
+class Transformer():
+    def __init(self, name):
+        self.name = name
 
 # class Transformer(Seq2Seq):
 
