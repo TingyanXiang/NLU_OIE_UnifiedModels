@@ -161,7 +161,7 @@ class TransformerAttentionDecoder(nn.Module):
 
         if hasattr(self, 'output_projection'):
             x = x @ self.output_projection.t()
-        if self.classifier_type == 'normal'
+        if self.classifier_type == 'normal':
             x = self.classifier(x)
             x = self.logsoftmax(x)
         elif self.classifier_type == 'copy':
