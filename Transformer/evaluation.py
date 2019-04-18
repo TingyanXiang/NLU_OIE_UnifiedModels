@@ -4,7 +4,8 @@ import numpy as np
 from config import SOS_index, UNK_index, EOS_index, PAD_index, OOV_pred_index, EOS_pred_index, vocab_pred, vocab_pred_size
 #import beam
 import difflib
-from Multilayers_Decoder import sequence_mask
+from seq2seq.models.transformer import sequence_mask
+from seq2seq.models.modules.state import State
 from scipy.optimize import linear_sum_assignment
 
 def similarity_score(fact1, fact2):
@@ -31,6 +32,9 @@ def check_fact_same(org_fact, pred_fact):
             return True
     return False
 
+def bridge(context):
+    return State(context=context,batch_first=True)
+
 def predict_facts(loader, encoder, decoder, tgt_max_length, vocab):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")    
     encoder.eval()
@@ -43,10 +47,10 @@ def predict_facts(loader, encoder, decoder, tgt_max_length, vocab):
 
     for src_tensor, src_true_len, tgt_tensor, tgt_true_len, tgt_label_vocab, tgt_label_copy, src_org_batch, tgt_org_batch in loader:
         batch_size = src_tensor.size(0)
-        encoder_hidden, encoder_cell = encoder.initHidden(batch_size)
-        encoder_outputs, encoder_hidden, encoder_cell = encoder(src_tensor, encoder_hidden, src_true_len, encoder_cell)
+        encoder_context = encoder(src_tensor)
+        state = bridge(encoder_context)
+
         decoder_input = torch.tensor([SOS_index]*batch_size, device=device).unsqueeze(1)
-        decoder_hidden, decoder_cell = encoder_hidden, decoder.initHidden(batch_size)
 
         decoding_token_index = 0
         stop_flag = [False]*batch_size
@@ -54,7 +58,7 @@ def predict_facts(loader, encoder, decoder, tgt_max_length, vocab):
         tgt_pred_batch = [[] for i_batch in range(batch_size)]
         tgt_true_len_max = tgt_true_len.cpu().numpy().max()
         while decoding_token_index < tgt_max_length:
-            decoder_output, decoder_hidden, _, decoder_cell = decoder(decoder_input, decoder_hidden, src_true_len, encoder_outputs, decoder_cell)
+            decoder_output, _ = decoder(decoder_input, state) # state update at each step
 
             # # compute loss 
             # if decoding_token_index < tgt_true_len_max:
