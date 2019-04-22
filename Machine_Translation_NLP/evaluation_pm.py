@@ -104,6 +104,10 @@ def evaluate_prediction(tgt_org, tgt_pred):
     eval_len = len(tgt_pred)
     precision = np.zeros((eval_len,))
     recall = np.zeros((eval_len,))
+    F_scores = np.zeros((eval_len,))
+    matched_num = np.zeros((eval_len,))
+    org_num = np.zeros((eval_len,))
+    pred_num = np.zeros((eval_len,))
     for i in range(eval_len):
         org_facts = ''.join(tgt_org[i]).split(fact_seperator)
         pred_facts = ''.join(tgt_pred[i]).split(fact_seperator)
@@ -126,8 +130,13 @@ def evaluate_prediction(tgt_org, tgt_pred):
             if fact_same:
                 org_match_num[org_i] = 1
                 pred_match_num[pred_i] = 1
+        matched_num[i] = pred_match_num.sum()
+        assert(matched_num==org_match_num.sum())
+        org_num[i] = org_facts_num
+        pred_num[i] = pred_facts_num
         precision[i] = pred_match_num.mean()
         recall[i] = org_match_num.mean()
+        F_scores[i] = 2*precision[i]*recall[i]/(precision[i]+recall[i]+1e-10)
     return precision, recall
 
 

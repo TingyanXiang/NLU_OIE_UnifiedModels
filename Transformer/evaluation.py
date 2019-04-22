@@ -1,6 +1,7 @@
 # config:
 import torch
 import numpy as np
+from config import fact_seperator, element_seperator
 from config import SOS_index, UNK_index, EOS_index, PAD_index, OOV_pred_index, EOS_pred_index, vocab_pred, vocab_pred_size
 #import beam
 import difflib
@@ -9,8 +10,8 @@ from seq2seq.models.modules.state import State
 from scipy.optimize import linear_sum_assignment
 
 def similarity_score(fact1, fact2):
-    elem1 = fact1.split('@')
-    elem2 = fact2.split('@')
+    elem1 = fact1.split(element_seperator)
+    elem2 = fact2.split(element_seperator)
     n1 = len(elem1)
     n2 = len(elem2)
     sim = 0
@@ -19,8 +20,8 @@ def similarity_score(fact1, fact2):
     return sim/max(n1,n2)
 
 def check_fact_same(org_fact, pred_fact):
-    org_fact_ele = org_fact.split('@')
-    pred_fact_ele = pred_fact.split('@')
+    org_fact_ele = org_fact.split(element_seperator)
+    pred_fact_ele = pred_fact.split(element_seperator)
     if len(org_fact_ele) == len(pred_fact_ele):
         ele_num = len(org_fact_ele)
         if difflib.SequenceMatcher(None,org_fact,pred_fact).ratio() > 0.85:
@@ -106,9 +107,13 @@ def evaluate_prediction(tgt_org, tgt_pred):
     eval_len = len(tgt_pred)
     precision = np.zeros((eval_len,))
     recall = np.zeros((eval_len,))
+    F_scores = np.zeros((eval_len,))
+    matched_num = np.zeros((eval_len,))
+    org_num = np.zeros((eval_len,))
+    pred_num = np.zeros((eval_len,))
     for i in range(eval_len):
-        org_facts = ''.join(tgt_org[i]).split('$')
-        pred_facts = ''.join(tgt_pred[i]).split('$')
+        org_facts = ''.join(tgt_org[i]).split(fact_seperator)
+        pred_facts = ''.join(tgt_pred[i]).split(fact_seperator)
         # remove duplicates
         pred_facts = list(set(pred_facts))
         org_facts_num = len(org_facts)
@@ -128,8 +133,13 @@ def evaluate_prediction(tgt_org, tgt_pred):
             if fact_same:
                 org_match_num[org_i] = 1
                 pred_match_num[pred_i] = 1
+        matched_num[i] = pred_match_num.sum()
+        assert(matched_num==org_match_num.sum())
+        org_num[i] = org_facts_num
+        pred_num[i] = pred_facts_num
         precision[i] = pred_match_num.mean()
         recall[i] = org_match_num.mean()
+        F_scores[i] = 2*precision[i]*recall[i]/(precision[i]+recall[i]+1e-10)
     return precision, recall
 
 
