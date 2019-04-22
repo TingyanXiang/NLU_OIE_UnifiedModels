@@ -65,7 +65,7 @@ class TransformerAttentionEncoder(nn.Module):
 class TransformerAttentionDecoder(nn.Module):
 
     def __init__(self, vocab_size, hidden_size=512, embedding_size=None, num_layers=6,
-                 num_heads=8, dropout=0, inner_linear=2048, inner_groups=1, prenormalized=False, stateful=False, state_dim=None,
+                 num_heads=8, dropout=0, inner_linear=2048, inner_groups=1, prenormalized=False, stateful=None, state_dim=None,
                  mask_symbol=PAD_index, tie_embedding=True, layer_norm=True, weight_norm=False, embedder=None, classifier_type=None):
 
         super(TransformerAttentionDecoder, self).__init__()
@@ -207,7 +207,7 @@ class CopyMechanism(nn.Module):
         return log_prob_scores
 
 class Transformer():
-    def __init(self, name):
+    def __init__(self, name):
         self.name = name
 
 # class Transformer(Seq2Seq):
