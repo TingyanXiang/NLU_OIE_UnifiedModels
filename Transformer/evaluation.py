@@ -140,7 +140,7 @@ def evaluate_prediction(tgt_org, tgt_pred):
         precision[i] = pred_match_num.mean()
         recall[i] = org_match_num.mean()
         F_scores[i] = 2*precision[i]*recall[i]/(precision[i]+recall[i]+1e-10)
-    return precision, recall
+    return precision, recall, F_scores, matched_num, org_num, pred_num
 
 
 
