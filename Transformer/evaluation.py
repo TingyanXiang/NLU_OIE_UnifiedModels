@@ -134,7 +134,7 @@ def evaluate_prediction(tgt_org, tgt_pred):
                 org_match_num[org_i] = 1
                 pred_match_num[pred_i] = 1
         matched_num[i] = pred_match_num.sum()
-        assert(matched_num==org_match_num.sum())
+        assert(matched_num[i]==org_match_num.sum())
         org_num[i] = org_facts_num
         pred_num[i] = pred_facts_num
         precision[i] = pred_match_num.mean()
