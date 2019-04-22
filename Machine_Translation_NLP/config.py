@@ -10,8 +10,10 @@ SOS_index = vocab_prefix.index('<SOS>')
 
 #vocab_pred = ['<PAD>','<OOV>','<EOS>','ISA','DESC','IN','BIRTH',"DEATH", 
 #"=", "$", "[", "]", "|", "X", "Y", "Z", "P", "@", "&"]
+fact_seperator = "^"
+element_seperator = "`"
 vocab_pred = ['<PAD>','<OOV>','<EOS>','ISA','DESC','IN','BIRTH',"DEATH",
-"=", "$", "[", "]", "|", "X", "Y", "Z", "P", "@", "&", "_"]
+"=", "[", "]", "|", "X", "Y", "Z", "P", "_", fact_seperator, element_seperator, "&"]
 vocab_pred_size = len(vocab_pred)
 
 OOV_pred_index = vocab_pred.index('<OOV>')
