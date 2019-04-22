@@ -41,7 +41,8 @@ def predict_facts(loader, encoder, decoder, tgt_max_length, vocab):
     tgt_org = []
     loss = 0
 
-    for src_tensor, src_true_len, tgt_tensor, tgt_true_len, tgt_label_vocab, tgt_label_copy, src_org_batch, tgt_org_batch in loader:
+    for src_tensor, src_true_len, tgt_batch, tgt_true_len, tgt_label_vocab, tgt_label_copy, src_org_batch, tgt_org_batch in loader:
+        src_tensor, src_true_len = src_tensor.to(device), src_true_len.to(device)
         batch_size = src_tensor.size(0)
         encoder_hidden, encoder_cell = encoder.initHidden(batch_size)
         encoder_outputs, encoder_hidden, encoder_cell = encoder(src_tensor, encoder_hidden, src_true_len, encoder_cell)
@@ -52,7 +53,7 @@ def predict_facts(loader, encoder, decoder, tgt_max_length, vocab):
         stop_flag = [False]*batch_size
         step_log_likelihoods = []
         tgt_pred_batch = [[] for i_batch in range(batch_size)]
-        tgt_true_len_max = tgt_true_len.cpu().numpy().max()
+        #tgt_true_len_max = tgt_true_len.cpu().numpy().max()
         while decoding_token_index < tgt_max_length:
             decoder_output, decoder_hidden, _, decoder_cell = decoder(decoder_input, decoder_hidden, src_true_len, encoder_outputs, decoder_cell)
 
